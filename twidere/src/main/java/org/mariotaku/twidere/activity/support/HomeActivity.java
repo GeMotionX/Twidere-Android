@@ -19,6 +19,9 @@
 
 package org.mariotaku.twidere.activity.support;
 
+import android.animation.Animator;
+import android.animation.Animator.AnimatorListener;
+import android.animation.ObjectAnimator;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.SearchManager;
@@ -26,6 +29,7 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Resources;
 import android.database.ContentObserver;
 import android.graphics.Canvas;
 import android.graphics.PorterDuff.Mode;
@@ -43,6 +47,7 @@ import android.support.v4.app.NotificationCompat;
 import android.support.v4.view.ViewPager;
 import android.support.v4.view.ViewPager.OnPageChangeListener;
 import android.support.v7.widget.Toolbar;
+import android.util.Property;
 import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -54,20 +59,23 @@ import android.view.ViewGroup;
 import android.view.ViewGroup.MarginLayoutParams;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.FrameLayout.LayoutParams;
 import android.widget.Toast;
 
 import com.jeremyfeinstein.slidingmenu.lib.SlidingMenu;
 import com.jeremyfeinstein.slidingmenu.lib.SlidingMenu.CanvasTransformer;
+import com.jeremyfeinstein.slidingmenu.lib.SlidingMenu.OnClosedListener;
+import com.jeremyfeinstein.slidingmenu.lib.SlidingMenu.OnOpenedListener;
 import com.squareup.otto.Bus;
 import com.squareup.otto.Subscribe;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.mariotaku.twidere.R;
-import org.mariotaku.twidere.activity.DataProfilingSettingsActivity;
 import org.mariotaku.twidere.activity.SettingsActivity;
 import org.mariotaku.twidere.activity.SettingsWizardActivity;
+import org.mariotaku.twidere.activity.iface.IControlBarActivity;
 import org.mariotaku.twidere.adapter.support.SupportTabsAdapter;
 import org.mariotaku.twidere.app.TwidereApplication;
 import org.mariotaku.twidere.fragment.CustomTabsFragment;
@@ -83,8 +91,6 @@ import org.mariotaku.twidere.model.ParcelableAccount;
 import org.mariotaku.twidere.model.SupportTabSpec;
 import org.mariotaku.twidere.provider.TwidereDataStore.Accounts;
 import org.mariotaku.twidere.task.TwidereAsyncTask;
-import org.mariotaku.twidere.util.accessor.ActivityAccessor;
-import org.mariotaku.twidere.util.accessor.ActivityAccessor.TaskDescriptionCompat;
 import org.mariotaku.twidere.util.AsyncTwitterWrapper;
 import org.mariotaku.twidere.util.ColorUtils;
 import org.mariotaku.twidere.util.CustomTabUtils;
@@ -95,6 +101,8 @@ import org.mariotaku.twidere.util.MultiSelectEventHandler;
 import org.mariotaku.twidere.util.ThemeUtils;
 import org.mariotaku.twidere.util.UnreadCountUtils;
 import org.mariotaku.twidere.util.Utils;
+import org.mariotaku.twidere.util.accessor.ActivityAccessor;
+import org.mariotaku.twidere.util.accessor.ActivityAccessor.TaskDescriptionCompat;
 import org.mariotaku.twidere.util.accessor.ViewAccessor;
 import org.mariotaku.twidere.util.message.TaskStateChangedEvent;
 import org.mariotaku.twidere.util.message.UnreadCountUpdatedEvent;
@@ -106,6 +114,8 @@ import org.mariotaku.twidere.view.TabPagerIndicator;
 import org.mariotaku.twidere.view.TintedStatusFrameLayout;
 import org.mariotaku.twidere.view.iface.IHomeActionButton;
 
+import edu.tsinghua.spice.Utilies.NetworkStateUtil;
+import edu.tsinghua.spice.Utilies.SpiceProfilingUtil;
 import edu.ucdavis.earlybird.ProfilingUtil;
 
 import static org.mariotaku.twidere.util.CompareUtils.classEquals;
@@ -119,9 +129,9 @@ import static org.mariotaku.twidere.util.Utils.openMessageConversation;
 import static org.mariotaku.twidere.util.Utils.openSearch;
 import static org.mariotaku.twidere.util.Utils.showMenuItemToast;
 
-public class HomeActivity extends BaseSupportActivity implements OnClickListener, OnPageChangeListener,
-        SupportFragmentCallback, SlidingMenu.OnOpenedListener, SlidingMenu.OnClosedListener,
-        OnLongClickListener {
+public class HomeActivity extends BaseActionBarActivity implements OnClickListener, OnPageChangeListener,
+        SupportFragmentCallback, OnOpenedListener, OnClosedListener,
+        OnLongClickListener, AnimatorListener {
 
     private final Handler mHandler = new Handler();
 
@@ -158,6 +168,7 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
     private int mTabDisplayOption;
     private float mPagerPosition;
     private Toolbar mActionBar;
+    private int mControlAnimationDirection;
 
     public void closeAccountsDrawer() {
         if (mSlidingMenu == null) return;
@@ -167,6 +178,25 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
     @Override
     public Fragment getCurrentVisibleFragment() {
         return mCurrentVisibleFragment;
+    }
+
+    @Override
+    public void onAnimationStart(Animator animation) {
+    }
+
+    @Override
+    public void onAnimationEnd(Animator animation) {
+        mControlAnimationDirection = 0;
+    }
+
+    @Override
+    public void onAnimationCancel(Animator animation) {
+        mControlAnimationDirection = 0;
+    }
+
+    @Override
+    public void onAnimationRepeat(Animator animation) {
+
     }
 
     @Override
@@ -190,10 +220,36 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
                 && ((RefreshScrollTopInterface) f).triggerRefresh();
     }
 
+    private static final long DURATION = 200l;
+
+    @Override
+    public void setControlBarVisibleAnimate(boolean visible) {
+        if (mControlAnimationDirection != 0) return;
+        final ObjectAnimator animator;
+        final float offset = getControlBarOffset();
+        if (visible) {
+            if (offset >= 1) return;
+            animator = ObjectAnimator.ofFloat(this, ControlBarOffsetProperty.SINGLETON, offset, 1);
+        } else {
+            if (offset <= 0) return;
+            animator = ObjectAnimator.ofFloat(this, ControlBarOffsetProperty.SINGLETON, offset, 0);
+        }
+        animator.setInterpolator(new DecelerateInterpolator());
+        animator.addListener(this);
+        animator.setDuration(DURATION);
+        animator.start();
+        mControlAnimationDirection = visible ? 1 : -1;
+    }
+
     @Override
     public void setControlBarOffset(float offset) {
         mTabsContainer.setTranslationY(getControlBarHeight() * (offset - 1));
-        mActionsButton.setTranslationY(mActionsButton.getHeight() * (1 - offset));
+        final ViewGroup.LayoutParams lp = mActionsButton.getLayoutParams();
+        if (lp instanceof MarginLayoutParams) {
+            mActionsButton.setTranslationY((((MarginLayoutParams) lp).bottomMargin + mActionsButton.getHeight()) * (1 - offset));
+        } else {
+            mActionsButton.setTranslationY(mActionsButton.getHeight() * (1 - offset));
+        }
         notifyControlBarOffsetChanged();
     }
 
@@ -289,6 +345,7 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
         mTabDisplayOption = getTabDisplayOptionInt(this);
         final int initialTabPosition = handleIntent(intent, savedInstanceState == null);
 
+        mColorStatusFrameLayout.setOnFitSystemWindowsListener(this);
         ThemeUtils.applyBackground(mTabIndicator);
         mPagerAdapter = new SupportTabsAdapter(this, getSupportFragmentManager(), mTabIndicator, 1);
         mViewPager.setAdapter(mPagerAdapter);
@@ -356,6 +413,10 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
         }
         // UCD
         ProfilingUtil.profile(this, ProfilingUtil.FILE_NAME_APP, "App onStart");
+        // spice
+        SpiceProfilingUtil.profile(this, SpiceProfilingUtil.FILE_NAME_APP, "App Launch" + "," + Build.MODEL);
+        SpiceProfilingUtil.profile(this, SpiceProfilingUtil.FILE_NAME_ONLAUNCH, "App Launch" + "," + NetworkStateUtil.getConnectedType(this) + "," + Build.MODEL);
+        //end
         updateUnreadCount();
     }
 
@@ -371,6 +432,10 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
 
         // UCD
         ProfilingUtil.profile(this, ProfilingUtil.FILE_NAME_APP, "App onStop");
+        // spice
+        SpiceProfilingUtil.profile(this, SpiceProfilingUtil.FILE_NAME_APP, "App Stop");
+        SpiceProfilingUtil.profile(this, SpiceProfilingUtil.FILE_NAME_ONLAUNCH, "App Stop" + "," + NetworkStateUtil.getConnectedType(this) + "," + Build.MODEL);
+        //end
         super.onStop();
     }
 
@@ -480,11 +545,6 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
 
     @Override
     public void onPageScrolled(final int position, final float positionOffset, final int positionOffsetPixels) {
-        final float pagerPosition = position + positionOffset;
-        if (!Float.isNaN(mPagerPosition)) {
-            setControlBarOffset(MathUtils.clamp(getControlBarOffset() + Math.abs(pagerPosition - mPagerPosition), 1, 0));
-        }
-        mPagerPosition = pagerPosition;
     }
 
     @Override
@@ -510,7 +570,7 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
 
     @Override
     public void onPageScrollStateChanged(final int state) {
-
+        setControlBarVisibleAnimate(true);
     }
 
     public void openSearchView(final ParcelableAccount account) {
@@ -523,7 +583,6 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
         if (fragment instanceof AccountsDashboardFragment) {
             ((AccountsDashboardFragment) fragment).setStatusBarHeight(insets.top);
         }
-        //TODO
         mColorStatusFrameLayout.setStatusBarHeight(insets.top);
     }
 
@@ -715,13 +774,18 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
 
     private void setupSlidingMenu() {
         if (mSlidingMenu == null) return;
-        final int marginThreshold = getResources().getDimensionPixelSize(R.dimen.default_sliding_menu_margin_threshold);
+        final Resources res = getResources();
+        final int marginThreshold = res.getDimensionPixelSize(R.dimen.default_sliding_menu_margin_threshold);
+        final boolean relativeBehindWidth = res.getBoolean(R.bool.relative_behind_width);
         mSlidingMenu.setMode(SlidingMenu.LEFT_RIGHT);
         mSlidingMenu.setShadowWidthRes(R.dimen.default_sliding_menu_shadow_width);
         mSlidingMenu.setShadowDrawable(R.drawable.shadow_left);
         mSlidingMenu.setSecondaryShadowDrawable(R.drawable.shadow_right);
-//        mSlidingMenu.setBehindWidthRes(R.dimen.drawer_width_home);
-        mSlidingMenu.setBehindOffsetRes(R.dimen.drawer_offset_home);
+        if (relativeBehindWidth) {
+            mSlidingMenu.setBehindOffsetRes(R.dimen.drawer_offset_home);
+        } else {
+            mSlidingMenu.setBehindWidthRes(R.dimen.drawer_width_home);
+        }
         mSlidingMenu.setTouchmodeMarginThreshold(marginThreshold);
         mSlidingMenu.setFadeDegree(0.5f);
         mSlidingMenu.setMenu(R.layout.drawer_home_accounts);
@@ -744,18 +808,20 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
     }
 
     private void showDataProfilingRequest() {
-        if (mPreferences.getBoolean(KEY_SHOW_UCD_DATA_PROFILING_REQUEST, true)) {
-            final Intent intent = new Intent(this, DataProfilingSettingsActivity.class);
-            final PendingIntent content_intent = PendingIntent.getActivity(this, 0, intent, 0);
-            final NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
-            builder.setAutoCancel(true);
-            builder.setSmallIcon(R.drawable.ic_stat_info);
-            builder.setTicker(getString(R.string.data_profiling_notification_ticker));
-            builder.setContentTitle(getString(R.string.data_profiling_notification_title));
-            builder.setContentText(getString(R.string.data_profiling_notification_desc));
-            builder.setContentIntent(content_intent);
-            mNotificationManager.notify(NOTIFICATION_ID_DATA_PROFILING, builder.build());
+        //spice
+        if (mPreferences.contains(KEY_USAGE_STATISTICS)) {
+            return;
         }
+        final Intent intent = new Intent(this, UsageStatisticsActivity.class);
+        final PendingIntent contentIntent = PendingIntent.getActivity(this, 0, intent, 0);
+        final NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
+        builder.setAutoCancel(true);
+        builder.setSmallIcon(R.drawable.ic_stat_info);
+        builder.setTicker(getString(R.string.usage_statistics));
+        builder.setContentTitle(getString(R.string.usage_statistics));
+        builder.setContentText(getString(R.string.usage_statistics_notification_summary));
+        builder.setContentIntent(contentIntent);
+        mNotificationManager.notify(NOTIFICATION_ID_DATA_PROFILING, builder.build());
     }
 
     private void triggerActionsClick() {
@@ -795,7 +861,6 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
                 title = R.string.compose;
             }
         }
-        final boolean hasActivatedTask = hasActivatedTask();
         if (mActionsButton instanceof IHomeActionButton) {
             final IHomeActionButton hab = (IHomeActionButton) mActionsButton;
             hab.setIcon(icon);
@@ -880,7 +945,7 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
         protected int[] doInBackground(final Void... params) {
             final int tabCount = mIndicator.getCount();
             final int[] result = new int[tabCount];
-            for (int i = 0, j = tabCount; i < j; i++) {
+            for (int i = 0; i < tabCount; i++) {
                 result[i] = UnreadCountUtils.getUnreadCount(mContext, i);
             }
             return result;
@@ -897,19 +962,21 @@ public class HomeActivity extends BaseSupportActivity implements OnClickListener
 
     }
 
-    public void moveControlBarBy(float delta) {
-        final int min = -getControlBarHeight(), max = 0;
-        mTabsContainer.setTranslationY(MathUtils.clamp(mTabsContainer.getTranslationY() + delta, max, min));
-        final ViewGroup.LayoutParams ablp = mActionsButton.getLayoutParams();
-        final int totalHeight;
-        if (ablp instanceof MarginLayoutParams) {
-            final MarginLayoutParams mlp = (MarginLayoutParams) ablp;
-            totalHeight = mActionsButton.getHeight() + mlp.topMargin + mlp.bottomMargin;
-        } else {
-            totalHeight = mActionsButton.getHeight();
-        }
-        mActionsButton.setTranslationY(MathUtils.clamp(mActionsButton.getTranslationY() - delta, totalHeight, 0));
-        notifyControlBarOffsetChanged();
-    }
+    private static class ControlBarOffsetProperty extends Property<IControlBarActivity, Float> {
+        public static final ControlBarOffsetProperty SINGLETON = new ControlBarOffsetProperty();
 
+        @Override
+        public void set(IControlBarActivity object, Float value) {
+            object.setControlBarOffset(value);
+        }
+
+        public ControlBarOffsetProperty() {
+            super(Float.TYPE, null);
+        }
+
+        @Override
+        public Float get(IControlBarActivity object) {
+            return object.getControlBarOffset();
+        }
+    }
 }

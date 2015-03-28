@@ -18,15 +18,13 @@
  */
 
 apply plugin: 'com.android.application'
+apply from: rootProject.file('global.gradle')
 
 android {
-    compileSdkVersion 21
-    buildToolsVersion "21.1.2"
-
     defaultConfig {
         applicationId "org.mariotaku.twidere.extension.push.xiaomi"
         minSdkVersion 14
-        targetSdkVersion 21
+        targetSdkVersion 22
         versionCode 2
         versionName "1.0"
     }

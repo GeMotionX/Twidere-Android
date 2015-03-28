@@ -25,7 +25,7 @@ import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 
 import org.mariotaku.twidere.adapter.iface.IBaseAdapter;
 import org.mariotaku.twidere.app.TwidereApplication;
-import org.mariotaku.twidere.util.ImageLoaderWrapper;
+import org.mariotaku.twidere.util.MediaLoaderWrapper;
 import org.mariotaku.twidere.util.OnLinkClickHandler;
 import org.mariotaku.twidere.util.TwidereLinkify;
 
@@ -40,10 +40,10 @@ public class BaseArrayAdapter<T> extends ArrayAdapter<T> implements IBaseAdapter
     private float mTextSize;
     private int mLinkHighlightOption;
 
-    private boolean mDisplayProfileImage, mNicknameOnly, mDisplayNameFirst, mShowAccountColor;
+    private boolean mDisplayProfileImage, mDisplayNameFirst, mShowAccountColor;
 
     private final SharedPreferences mNicknamePrefs, mColorPrefs;
-    private final ImageLoaderWrapper mImageLoader;
+    private final MediaLoaderWrapper mImageLoader;
 
     public BaseArrayAdapter(final Context context, final int layoutRes) {
         this(context, layoutRes, null);
@@ -61,7 +61,7 @@ public class BaseArrayAdapter<T> extends ArrayAdapter<T> implements IBaseAdapter
     }
 
     @Override
-    public ImageLoaderWrapper getImageLoader() {
+    public MediaLoaderWrapper getImageLoader() {
         return mImageLoader;
     }
 
@@ -90,19 +90,14 @@ public class BaseArrayAdapter<T> extends ArrayAdapter<T> implements IBaseAdapter
     }
 
     @Override
-    public final boolean isNicknameOnly() {
-        return mNicknameOnly;
-    }
-
-    @Override
     public final boolean isShowAccountColor() {
         return mShowAccountColor;
     }
 
     @Override
     public void onSharedPreferenceChanged(final SharedPreferences preferences, final String key) {
-        if (KEY_NICKNAME_ONLY.equals(key) || KEY_DISPLAY_PROFILE_IMAGE.equals(key)
-                || KEY_MEDIA_PREVIEW_STYLE.equals(key) || KEY_DISPLAY_SENSITIVE_CONTENTS.equals(key)) {
+        if (KEY_DISPLAY_PROFILE_IMAGE.equals(key) || KEY_MEDIA_PREVIEW_STYLE.equals(key)
+                || KEY_DISPLAY_SENSITIVE_CONTENTS.equals(key)) {
             notifyDataSetChanged();
         }
     }
@@ -123,11 +118,6 @@ public class BaseArrayAdapter<T> extends ArrayAdapter<T> implements IBaseAdapter
         mLinkify.setHighlightOption(optionInt);
         if (optionInt == mLinkHighlightOption) return;
         mLinkHighlightOption = optionInt;
-    }
-
-    @Override
-    public final void setNicknameOnly(final boolean nicknameOnly) {
-        mNicknameOnly = nicknameOnly;
     }
 
     @Override

@@ -56,7 +56,6 @@
     <string name="unfavorite">Unfavorite</string>
     <string name="reply">Reply</string>
     <string name="share">Share</string>
-    <string name="share_via_twidere">Share via Twidere</string>
     <string name="view_image">Image</string>
     <string name="view_map">Map</string>
     <string name="view_status">View tweet</string>
@@ -100,8 +99,8 @@
     <string name="users_favorited_this">Users favorited this</string>
     <string name="reply_to">Reply to <xliff:g id="user_name">%s</xliff:g></string>
     <string name="quote_user">Quote <xliff:g id="user_name">%s</xliff:g></string>
-    <string name="time_source"><xliff:g id="time">%1$s</xliff:g>, via <xliff:g id="source">%2$s</xliff:g></string>
-    <string name="source">via <xliff:g id="source">%s</xliff:g></string>
+    <string name="time_source"><xliff:g id="time">%1$s</xliff:g> · <xliff:g id="source">%2$s</xliff:g></string>
+    <string name="source"><xliff:g id="source">%s</xliff:g></string>
     <string name="filters">Filters</string>
     <string name="users">Users</string>
     <string name="user">User</string>
@@ -354,12 +353,6 @@
     <string name="action_accepting_follow_request">accepting follow request</string>
     <string name="action_denying_follow_request">denying follow request</string>
     <string name="status_is_duplicate">Your tweet is a duplicate.</string>
-    <string name="data_profiling_summary">Twidere took part in a research on predicting user\'s social behavior to pre-caching content started by students in UC Davis.\n\nHere are the data we wanted to collect and why:\nCollected data:\n1. User\'s twitter ID\n2. User\'s home timeline (prediction based on user\'s interest and social interaction)\n3. User\'s click on a tweet (prediction based on user\'s interest and social interaction)\n4. Coarse location (which is good predictor when user will access twitter)\n\nTwidere will upload collected data only when Wifi available and your device connected to charger, so It will not cost you extra bandwidth fee or drain your battery power.</string>
-    <string name="data_profiling">Usage Statistics</string>
-    <string name="enable_data_profiling">Enable Reporting</string>
-    <string name="data_profiling_notification_ticker">Statistics Opted-In</string>
-    <string name="data_profiling_notification_title">Usage Statistics</string>
-    <string name="data_profiling_notification_desc">Enable or Disable Usage Statistics</string>
     <string name="silent_notifications">Silent notifications</string>
     <string name="silent_notifications_summary">Disable ringtone/vibrate for notifications</string>
     <string name="disable_background_service">Disable background service</string>
@@ -511,6 +504,7 @@
     <string name="wizard_page_tabs_unchanged_message">You can add tabs in &quot;Settings&quot; - &quot;Tabs&quot;</string>
     <string name="wizard_page_cards_text">Config card items.</string>
     <string name="wizard_page_hints_text">Here are some useful hints.</string>
+    <string name="wizard_page_usage_statistics_text">Twidere took part in some research project that needs some usage data.</string>
     <string name="wizard_page_finished_title">Finished</string>
     <string name="wizard_page_finished_text">Now Twidere is ready for use.</string>
     <string name="invalid_tab">Invalid tab</string>
@@ -700,12 +694,11 @@
     <string name="round">Round</string>
     <string name="square">Square</string>
     <string name="profile_image_style">Profile image style</string>
-    <string name="default_profile_image_style">round</string>
     <string name="media_preview_style">Media preview style</string>
     <string name="draft_saved">Draft saved</string>
     <string name="open_twitter_links">Open Twitter links</string>
     <string name="N_others_quantity_one">another</string>
-    <string name="N_others_quantity_other"><xliff:g id="retweet_count">%d</xliff:g> others</string>
+    <string name="N_others_quantity_other"><xliff:g id="count">%d</xliff:g> others</string>
     <string name="type_name_to_search">Type name to search</string>
     <string name="no_user_found">No user found</string>
     <string name="members">Members</string>
@@ -721,5 +714,29 @@
     <string name="no_location">No location</string>
     <string name="getting_location">Getting location</string>
     <string name="save_to_gallery">Save to gallery</string>
+    <string name="usage_statistics">Usage statistics</string>
+    <string name="research_ucdavis_earlybird">UCDavis Earlybird</string>
+    <string name="research_tsinghua_spice">Tsinghua Spice</string>
+    <string name="unknown_location">Unknown location</string>
+    <string name="ellipsis">…</string>
+    <string name="designed_by">Designed by</string>
+    <string name="designer_name">Uucky Lee</string>
+    <string name="import_export_settings">Import/Export settings</string>
+    <string name="usage_statistics_header_summary">Twidere took part in some research project, join these projects will make Twidere and some other application better.</string>
+    <string name="no_tab">No tab</string>
+    <string name="user_protected_summary">You need to send follow request to this protected user to see tweets</string>
+    <string name="no_account">No account</string>
+    <string name="permission_description_shorten_status">Application can shorten tweet for Twidere, so it can access your tweet to send.</string>
+    <string name="permission_description_upload_media">Application can upload media for Twidere, so it can access media in your tweet to send.</string>
+    <string name="permission_description_sync_timeline">Application can sync read position for Twidere, so it can access your read position.</string>
+    <string name="title_activity_usage_statistics">UsageStatisticsActivity</string>
+
+    <string name="hello_world">Hello world!</string>
+    <string name="action_settings">Settings</string>
+    <string name="usage_statistics_notification_summary">Help us improve Twidere!</string>
+    <string name="from_name">From <xliff:g id="name">%1$s</xliff:g></string>
+    <string name="from_name_and_name">From <xliff:g id="name">%1$s</xliff:g> and <xliff:g id="name">%2$s</xliff:g></string>
+    <string name="from_name_and_N_others">From <xliff:g id="name">%1$s</xliff:g> and <xliff:g id="name">%2$d</xliff:g> others</string>
+    <string name="projects_we_took_part">Projects we took part</string>
 
 </resources>

@@ -28,15 +28,17 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
 import android.view.View;
 
 import org.mariotaku.twidere.Constants;
-import org.mariotaku.twidere.activity.support.BaseSupportActivity;
+import org.mariotaku.twidere.activity.support.BaseActionBarActivity;
 import org.mariotaku.twidere.app.TwidereApplication;
 import org.mariotaku.twidere.fragment.iface.IBaseFragment;
 import org.mariotaku.twidere.fragment.iface.SupportFragmentCallback;
 import org.mariotaku.twidere.util.AsyncTwitterWrapper;
 import org.mariotaku.twidere.util.MultiSelectManager;
+import org.mariotaku.twidere.util.ReadStateManager;
 
 public class BaseSupportFragment extends Fragment implements IBaseFragment, Constants {
 
@@ -83,10 +85,14 @@ public class BaseSupportFragment extends Fragment implements IBaseFragment, Cons
         return getApplication() != null ? getApplication().getTwitterWrapper() : null;
     }
 
+    public ReadStateManager getReadStateManager() {
+        return getApplication() != null ? getApplication().getReadStateManager() : null;
+    }
+
     public void invalidateOptionsMenu() {
-        final Activity activity = getActivity();
+        final FragmentActivity activity = getActivity();
         if (activity == null) return;
-        activity.invalidateOptionsMenu();
+        activity.supportInvalidateOptionsMenu();
     }
 
     public void registerReceiver(final BroadcastReceiver receiver, final IntentFilter filter) {
@@ -97,8 +103,8 @@ public class BaseSupportFragment extends Fragment implements IBaseFragment, Cons
 
     public void setProgressBarIndeterminateVisibility(final boolean visible) {
         final Activity activity = getActivity();
-        if (activity instanceof BaseSupportActivity) {
-            ((BaseSupportActivity) activity).setProgressBarIndeterminateVisibility(visible);
+        if (activity instanceof BaseActionBarActivity) {
+            ((BaseActionBarActivity) activity).setProgressBarIndeterminateVisibility(visible);
         }
     }
 

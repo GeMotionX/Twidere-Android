@@ -18,16 +18,14 @@
  */
 
 apply plugin: 'com.android.application'
+apply from: rootProject.file('global.gradle')
 apply from: rootProject.file('signing.gradle')
 
 android {
-    compileSdkVersion 21
-    buildToolsVersion "21.1.2"
-
     defaultConfig {
         applicationId "org.mariotaku.twidere.donate.nyanwp"
         minSdkVersion 14
-        targetSdkVersion 21
+        targetSdkVersion 22
         versionCode 3
         versionName "1.2"
     }

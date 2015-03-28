@@ -140,6 +140,7 @@ public interface IntentConstants {
     public static final String EXTRA_IDS = "ids";
     public static final String EXTRA_IS_SHARE = "is_share";
     public static final String EXTRA_STATUS = "status";
+    public static final String EXTRA_MESSAGE = "message";
     public static final String EXTRA_STATUS_JSON = "status_json";
     public static final String EXTRA_STATUSES = "statuses";
     public static final String EXTRA_DRAFT = "draft";
@@ -208,6 +209,8 @@ public interface IntentConstants {
     public static final String EXTRA_MY_FOLLOWING_ONLY = "my_following_only";
     public static final String EXTRA_RESTART_ACTIVITY = "restart_activity";
     public static final String EXTRA_FROM_USER = "from_user";
+    public static final String EXTRA_SHOW_MEDIA_PREVIEW = "show_media_preview";
+    public static final String EXTRA_SHOW_EXTRA_TYPE = "show_extra_type";
     public static final String EXTRA_BITMAP = "bitmap";
     public static final String EXTRA_SOURCE = "source";
     public static final String EXTRA_DESTINATION = "destination";

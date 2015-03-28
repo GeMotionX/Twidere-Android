@@ -35,15 +35,13 @@ import org.mariotaku.twidere.app.TwidereApplication;
 import org.mariotaku.twidere.model.ParcelableAccount;
 import org.mariotaku.twidere.model.ParcelableAccount.Indices;
 import org.mariotaku.twidere.provider.TwidereDataStore.Accounts;
-import org.mariotaku.twidere.util.ImageLoaderWrapper;
+import org.mariotaku.twidere.util.MediaLoaderWrapper;
 import org.mariotaku.twidere.view.holder.AccountViewHolder;
 
 public class AccountsAdapter extends SimpleDragSortCursorAdapter implements Constants, IBaseAdapter {
 
-    private final ImageLoaderWrapper mImageLoader;
+    private final MediaLoaderWrapper mImageLoader;
     private final SharedPreferences mPreferences;
-
-    private long mDefaultAccountId;
 
     private boolean mDisplayProfileImage;
     private int mChoiceMode;
@@ -70,12 +68,11 @@ public class AccountsAdapter extends SimpleDragSortCursorAdapter implements Cons
         final AccountViewHolder holder = (AccountViewHolder) view.getTag();
         holder.screen_name.setText("@" + cursor.getString(mIndices.screen_name));
         holder.setAccountColor(color);
-        holder.setIsDefault(mDefaultAccountId != -1 && mDefaultAccountId == cursor.getLong(mIndices.account_id));
         if (mDisplayProfileImage) {
             mImageLoader.displayProfileImage(holder.profile_image, cursor.getString(mIndices.profile_image_url));
         } else {
             mImageLoader.cancelDisplayTask(holder.profile_image);
-            holder.profile_image.setImageResource(R.drawable.ic_profile_image_default);
+//            holder.profile_image.setImageResource(R.drawable.ic_profile_image_default);
         }
         final boolean isMultipleChoice = mChoiceMode == ListView.CHOICE_MODE_MULTIPLE
                 || mChoiceMode == ListView.CHOICE_MODE_MULTIPLE_MODAL;
@@ -93,7 +90,7 @@ public class AccountsAdapter extends SimpleDragSortCursorAdapter implements Cons
     }
 
     @Override
-    public ImageLoaderWrapper getImageLoader() {
+    public MediaLoaderWrapper getImageLoader() {
         return mImageLoader;
     }
 
@@ -117,20 +114,10 @@ public class AccountsAdapter extends SimpleDragSortCursorAdapter implements Cons
         return mDisplayProfileImage;
     }
 
-    @Override
-    public boolean isNicknameOnly() {
-        return false;
-    }
 
     @Override
     public boolean isShowAccountColor() {
         return false;
-    }
-
-    @Override
-    public void notifyDataSetChanged() {
-        mDefaultAccountId = mPreferences.getLong(KEY_DEFAULT_ACCOUNT_ID, -1);
-        super.notifyDataSetChanged();
     }
 
     @Override
@@ -152,11 +139,6 @@ public class AccountsAdapter extends SimpleDragSortCursorAdapter implements Cons
 
     @Override
     public void setLinkHighlightOption(String option) {
-
-    }
-
-    @Override
-    public void setNicknameOnly(boolean nicknameOnly) {
 
     }
 

@@ -40,6 +40,11 @@ import org.mariotaku.twidere.provider.TwidereDataStore.Accounts;
 import org.mariotaku.twidere.provider.TwidereDataStore.Statuses;
 import org.mariotaku.twidere.task.TwidereAsyncTask;
 import org.mariotaku.twidere.util.Utils;
+import org.mariotaku.twidere.util.message.FavoriteCreatedEvent;
+import org.mariotaku.twidere.util.message.FavoriteDestroyedEvent;
+import org.mariotaku.twidere.util.message.StatusDestroyedEvent;
+import org.mariotaku.twidere.util.message.StatusListChangedEvent;
+import org.mariotaku.twidere.util.message.StatusRetweetedEvent;
 import org.mariotaku.twidere.util.message.TaskStateChangedEvent;
 
 import static org.mariotaku.twidere.util.Utils.buildStatusFilterWhereClause;
@@ -79,14 +84,37 @@ public abstract class CursorStatusesFragment extends AbsStatusesFragment<Cursor>
 
     @Override
     protected Object createMessageBusCallback() {
-        return new Object() {
+        return new ParcelableStatusesBusCallback();
+    }
 
 
-            @Subscribe
-            public void notifyTaskStateChanged(TaskStateChangedEvent event) {
-                updateRefreshState();
-            }
-        };
+    protected class ParcelableStatusesBusCallback {
+
+        @Subscribe
+        public void notifyTaskStateChanged(TaskStateChangedEvent event) {
+            updateRefreshState();
+        }
+
+        @Subscribe
+        public void notifyFavoriteCreated(FavoriteCreatedEvent event) {
+        }
+
+        @Subscribe
+        public void notifyFavoriteDestroyed(FavoriteDestroyedEvent event) {
+        }
+
+        @Subscribe
+        public void notifyStatusDestroyed(StatusDestroyedEvent event) {
+        }
+
+        @Subscribe
+        public void notifyStatusListChanged(StatusListChangedEvent event) {
+        }
+
+        @Subscribe
+        public void notifyStatusRetweeted(StatusRetweetedEvent event) {
+        }
+
     }
 
     @Override
@@ -105,14 +133,19 @@ public abstract class CursorStatusesFragment extends AbsStatusesFragment<Cursor>
         mContentObserver = new ContentObserver(new Handler()) {
             @Override
             public void onChange(boolean selfChange) {
-                reloadStatuses();
+//                reloadStatuses();
             }
         };
         cr.registerContentObserver(Accounts.CONTENT_URI, true, mContentObserver);
     }
 
     protected void reloadStatuses() {
-        getLoaderManager().restartLoader(0, getArguments(), this);
+        final Bundle args = new Bundle(), fragmentArgs = getArguments();
+        if (fragmentArgs != null) {
+            args.putAll(fragmentArgs);
+            args.putBoolean(EXTRA_FROM_USER, true);
+        }
+        getLoaderManager().restartLoader(0, args, this);
     }
 
     @Override
@@ -133,7 +166,12 @@ public abstract class CursorStatusesFragment extends AbsStatusesFragment<Cursor>
     }
 
     @Override
-    protected void onLoadMoreStatuses() {
+    public void onLoaderReset(Loader<Cursor> loader) {
+        getAdapter().setData(null);
+    }
+
+    @Override
+    public void onLoadMoreContents() {
         new TwidereAsyncTask<Void, Void, long[][]>() {
 
             @Override

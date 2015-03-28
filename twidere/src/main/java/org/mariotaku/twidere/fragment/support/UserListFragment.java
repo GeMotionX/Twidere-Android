@@ -29,6 +29,10 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Rect;
+import android.nfc.NdefMessage;
+import android.nfc.NdefRecord;
+import android.nfc.NfcAdapter.CreateNdefMessageCallback;
+import android.nfc.NfcEvent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.app.DialogFragment;
@@ -66,7 +70,8 @@ import org.mariotaku.twidere.model.ParcelableUser;
 import org.mariotaku.twidere.model.ParcelableUserList;
 import org.mariotaku.twidere.model.SingleResponse;
 import org.mariotaku.twidere.util.AsyncTwitterWrapper;
-import org.mariotaku.twidere.util.ImageLoaderWrapper;
+import org.mariotaku.twidere.util.MediaLoaderWrapper;
+import org.mariotaku.twidere.util.LinkCreator;
 import org.mariotaku.twidere.util.OnLinkClickHandler;
 import org.mariotaku.twidere.util.ParseUtils;
 import org.mariotaku.twidere.util.ThemeUtils;
@@ -94,7 +99,7 @@ public class UserListFragment extends BaseSupportFragment implements OnClickList
         LoaderCallbacks<SingleResponse<ParcelableUserList>>, DrawerCallback,
         SystemWindowsInsetsCallback, SupportFragmentCallback {
 
-    private ImageLoaderWrapper mProfileImageLoader;
+    private MediaLoaderWrapper mProfileImageLoader;
     private AsyncTwitterWrapper mTwitterWrapper;
 
     private ImageView mProfileImageView;
@@ -290,6 +295,18 @@ public class UserListFragment extends BaseSupportFragment implements OnClickList
 
         final FragmentActivity activity = getActivity();
 
+        Utils.setNdefPushMessageCallback(activity, new CreateNdefMessageCallback() {
+
+            @Override
+            public NdefMessage createNdefMessage(NfcEvent event) {
+                final ParcelableUserList userList = getUserList();
+                if (userList == null) return null;
+                return new NdefMessage(new NdefRecord[]{
+                        NdefRecord.createUri(LinkCreator.getTwitterUserListLink(userList.user_screen_name, userList.name)),
+                });
+            }
+        });
+
         mHeaderDrawerLayout.setDrawerCallback(this);
 
         mPagerAdapter = new SupportTabsAdapter(activity, getChildFragmentManager());
@@ -311,6 +328,10 @@ public class UserListFragment extends BaseSupportFragment implements OnClickList
         getUserListInfo(false);
 
         setupUserPages();
+    }
+
+    private ParcelableUserList getUserList() {
+        return mUserList;
     }
 
     @Override
@@ -462,7 +483,7 @@ public class UserListFragment extends BaseSupportFragment implements OnClickList
         setProgressBarIndeterminateVisibility(true);
         final long accountId = args != null ? args.getLong(EXTRA_ACCOUNT_ID, -1) : -1;
         final long userId = args != null ? args.getLong(EXTRA_USER_ID, -1) : -1;
-        final int listId = args != null ? args.getInt(EXTRA_LIST_ID, -1) : -1;
+        final long listId = args != null ? args.getLong(EXTRA_LIST_ID, -1) : -1;
         final String listName = args != null ? args.getString(EXTRA_LIST_NAME) : null;
         final String screenName = args != null ? args.getString(EXTRA_SCREEN_NAME) : null;
         final boolean omitIntentExtra = args == null || args.getBoolean(EXTRA_OMIT_INTENT_EXTRA, true);
@@ -541,13 +562,13 @@ public class UserListFragment extends BaseSupportFragment implements OnClickList
             tabArgs.putLong(EXTRA_ACCOUNT_ID, userList.account_id);
             tabArgs.putLong(EXTRA_USER_ID, userList.user_id);
             tabArgs.putString(EXTRA_SCREEN_NAME, userList.user_screen_name);
-            tabArgs.putInt(EXTRA_LIST_ID, (int) userList.id);
+            tabArgs.putLong(EXTRA_LIST_ID, userList.id);
             tabArgs.putString(EXTRA_LIST_NAME, userList.name);
         } else {
             tabArgs.putLong(EXTRA_ACCOUNT_ID, args.getLong(EXTRA_ACCOUNT_ID, -1));
             tabArgs.putLong(EXTRA_USER_ID, args.getLong(EXTRA_USER_ID, -1));
             tabArgs.putString(EXTRA_SCREEN_NAME, args.getString(EXTRA_SCREEN_NAME));
-            tabArgs.putInt(EXTRA_LIST_ID, args.getInt(EXTRA_LIST_ID, -1));
+            tabArgs.putLong(EXTRA_LIST_ID, args.getLong(EXTRA_LIST_ID, -1));
             tabArgs.putString(EXTRA_LIST_NAME, args.getString(EXTRA_LIST_NAME));
         }
         mPagerAdapter.addTab(UserListTimelineFragment.class, tabArgs, getString(R.string.statuses), null, 0);
@@ -630,11 +651,11 @@ public class UserListFragment extends BaseSupportFragment implements OnClickList
         private final boolean mOmitIntentExtra;
         private final Bundle mExtras;
         private final long mAccountId, mUserId;
-        private final int mListId;
+        private final long mListId;
         private final String mScreenName, mListName;
 
         private ParcelableUserListLoader(final Context context, final boolean omitIntentExtra, final Bundle extras,
-                                         final long accountId, final int listId, final String listName, final long userId,
+                                         final long accountId, final long listId, final String listName, final long userId,
                                          final String screenName) {
             super(context);
             mOmitIntentExtra = omitIntentExtra;

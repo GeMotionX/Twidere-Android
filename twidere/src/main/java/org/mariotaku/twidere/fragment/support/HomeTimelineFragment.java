@@ -30,16 +30,11 @@ import org.mariotaku.twidere.util.AsyncTwitterWrapper;
  */
 public class HomeTimelineFragment extends CursorStatusesFragment {
 
+    public static final String KEY_READ_POSITION_TAG = "home_timeline";
+
     @Override
     public Uri getContentUri() {
         return Statuses.CONTENT_URI;
-    }
-
-    @Override
-    protected void updateRefreshState() {
-        final AsyncTwitterWrapper twitter = getTwitterWrapper();
-        if (twitter == null) return;
-        setRefreshing(twitter.isHomeTimelineRefreshing());
     }
 
     @Override
@@ -54,6 +49,19 @@ public class HomeTimelineFragment extends CursorStatusesFragment {
     }
 
     @Override
+    protected void updateRefreshState() {
+        final AsyncTwitterWrapper twitter = getTwitterWrapper();
+        if (twitter == null) return;
+        setRefreshing(twitter.isHomeTimelineRefreshing());
+    }
+
+    @Override
+    public boolean isRefreshing() {
+        final AsyncTwitterWrapper twitter = getTwitterWrapper();
+        return twitter != null && twitter.isHomeTimelineRefreshing();
+    }
+
+    @Override
     public int getStatuses(long[] accountIds, long[] maxIds, long[] sinceIds) {
         final AsyncTwitterWrapper twitter = getTwitterWrapper();
         if (twitter == null) return -1;
@@ -63,4 +71,8 @@ public class HomeTimelineFragment extends CursorStatusesFragment {
         return twitter.getHomeTimelineAsync(accountIds, maxIds, sinceIds);
     }
 
+    @Override
+    protected String getReadPositionTag() {
+        return KEY_READ_POSITION_TAG;
+    }
 }

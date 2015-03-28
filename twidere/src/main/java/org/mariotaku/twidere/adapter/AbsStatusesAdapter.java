@@ -18,8 +18,8 @@ import org.mariotaku.twidere.app.TwidereApplication;
 import org.mariotaku.twidere.fragment.support.UserFragment;
 import org.mariotaku.twidere.model.ParcelableStatus;
 import org.mariotaku.twidere.util.AsyncTwitterWrapper;
-import org.mariotaku.twidere.util.ImageLoaderWrapper;
 import org.mariotaku.twidere.util.ImageLoadingHandler;
+import org.mariotaku.twidere.util.MediaLoaderWrapper;
 import org.mariotaku.twidere.util.SharedPreferencesWrapper;
 import org.mariotaku.twidere.util.ThemeUtils;
 import org.mariotaku.twidere.util.Utils;
@@ -39,7 +39,7 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
 
     private final Context mContext;
     private final LayoutInflater mInflater;
-    private final ImageLoaderWrapper mImageLoader;
+    private final MediaLoaderWrapper mImageLoader;
     private final ImageLoadingHandler mLoadingHandler;
     private final AsyncTwitterWrapper mTwitterWrapper;
     private final int mCardBackgroundColor;
@@ -47,7 +47,6 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
     private final int mProfileImageStyle, mMediaPreviewStyle;
     private final boolean mCompactCards;
     private final boolean mNameFirst;
-    private final boolean mNicknameOnly;
     private final boolean mDisplayMediaPreview;
     private boolean mLoadMoreIndicatorEnabled;
     private StatusAdapterListener mStatusAdapterListener;
@@ -69,7 +68,6 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
         mProfileImageStyle = Utils.getProfileImageStyle(preferences.getString(KEY_PROFILE_IMAGE_STYLE, null));
         mMediaPreviewStyle = Utils.getMediaPreviewStyle(preferences.getString(KEY_MEDIA_PREVIEW_STYLE, null));
         mNameFirst = preferences.getBoolean(KEY_NAME_FIRST, true);
-        mNicknameOnly = preferences.getBoolean(KEY_NICKNAME_ONLY, false);
         mDisplayMediaPreview = preferences.getBoolean(KEY_MEDIA_PREVIEW, false);
         setShowInReplyTo(true);
     }
@@ -84,40 +82,41 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
     }
 
     @Override
-    public ImageLoaderWrapper getImageLoader() {
+    public final MediaLoaderWrapper getImageLoader() {
         return mImageLoader;
     }
 
     @Override
-    public Context getContext() {
+    public final Context getContext() {
         return mContext;
     }
 
     @Override
-    public ImageLoadingHandler getImageLoadingHandler() {
+    public final ImageLoadingHandler getImageLoadingHandler() {
         return mLoadingHandler;
     }
 
     @Override
-    public int getProfileImageStyle() {
+    public final int getProfileImageStyle() {
         return mProfileImageStyle;
     }
 
     @Override
-    public int getMediaPreviewStyle() {
+    public final int getMediaPreviewStyle() {
         return mMediaPreviewStyle;
     }
 
     @Override
-    public AsyncTwitterWrapper getTwitterWrapper() {
+    public final AsyncTwitterWrapper getTwitterWrapper() {
         return mTwitterWrapper;
     }
 
     @Override
-    public float getTextSize() {
+    public final float getTextSize() {
         return mTextSize;
     }
 
+    @Override
     public boolean hasLoadMoreIndicator() {
         return mLoadMoreIndicatorEnabled;
     }
@@ -132,11 +131,6 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
         return mNameFirst;
     }
 
-    @Override
-    public boolean isNicknameOnly() {
-        return mNicknameOnly;
-    }
-
     public boolean isShowInReplyTo() {
         return mShowInReplyTo;
     }
@@ -148,7 +142,7 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
     }
 
     public boolean isStatus(int position) {
-        return position < getStatusCount();
+        return position < getStatusesCount();
     }
 
     @Override
@@ -194,7 +188,7 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
 
     @Override
     public int getItemViewType(int position) {
-        if (position == getStatusCount()) {
+        if (position == getStatusesCount()) {
             return ITEM_VIEW_TYPE_LOAD_INDICATOR;
         } else if (isGapItem(position)) {
             return ITEM_VIEW_TYPE_GAP;
@@ -204,7 +198,7 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
 
     @Override
     public final int getItemCount() {
-        return getStatusCount() + (mLoadMoreIndicatorEnabled ? 1 : 0);
+        return getStatusesCount() + (mLoadMoreIndicatorEnabled ? 1 : 0);
     }
 
     @Override
@@ -255,6 +249,7 @@ public abstract class AbsStatusesAdapter<D> extends Adapter<ViewHolder> implemen
         mStatusAdapterListener = listener;
     }
 
+    @Override
     public void setLoadMoreIndicatorEnabled(boolean enabled) {
         if (mLoadMoreIndicatorEnabled == enabled) return;
         mLoadMoreIndicatorEnabled = enabled;

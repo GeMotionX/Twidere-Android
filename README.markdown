@@ -1,20 +1,22 @@
 #Twidere - Twitter client, ∞#
 
-Twidere is a powerful twitter client for Android 1.6+ [<sup><font color=red>1</font></sup>](#note1) , which gives you a full Holo experience and nearly full Twitter's feature.
+[![Join the chat at https://gitter.im/TwidereProject/Twidere-Android](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/TwidereProject/Twidere-Android?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
+[![Travis status](https://api.travis-ci.org/TwidereProject/Twidere-Android.png)](https://travis-ci.org/TwidereProject/Twidere-Android/)
+
+Twidere is a powerful twitter client for Android 4.0+, which gives you a full Material experience and nearly complete (and even better) Twitter feature.
 
 ---
 
 ## Features ##
 
-* Pure & Clean Holo design works for both ICS and pre-ICS devices
-* Four themes [<sup><font color=red>2</font></sup>](#note2) (Light theme with colored ActionBar, Dark theme, Light theme, Light theme with dark ActionBar), theme color will change if you're using CM9+/AOKP
-* Dual pane layout for Tablets
-* Image preview (disabled by default in order to reduce network usage)
-* Built in image viewer and map viewer
-* Custom tabs
-* Profile banner (header) image support
+* Pure & Clean Material design works for both Lollipop and pre-Lollipop devices
+* Dark/Light theme, with theme color support
+* Media preview
+* Built in image viewer (with animated gif support) and map viewer
+* All tabs are customizable
 * Direct messages with conversation style
-* Filters (mute unwanted tweets)
+* Very powerful filters (mute unwanted tweets)
 * Drafts feature
 * Extension support like [Twicca](http://twicca.r246.jp/), but more friendly to users and developers
 * t.co link auto expanding
@@ -51,20 +53,23 @@ Thanks to their excellent design!
 * [Commons Lang](http://commons.apache.org/proper/commons-lang/), Copyright 2001-2013 The Apache Software Foundation
 * [SwipeBackLayout](https://github.com/Issacw0ng/SwipeBackLayout), Copyright 2013 Issac Wong
 * [Crouton](https://github.com/keyboardsurfer/Crouton), Copyright 2013 Benjamin Weiss at Neofonie Mobile GmbH.
-* [twitter-text-java](https://github.com/twitter/twitter-text-java), Copyright 2011 Twitter, Inc.
+* [twitter-text-java](https://github.com/twitter/twitter-text), Copyright 2014 Twitter, Inc and other contributors
 * [Twitter4J](https://github.com/yusuke/twitter4j), Copyright 2007-2013 Yusuke Yamamoto
 * [dnsjava](http://www.xbill.org/dnsjava/), Copyright 1999-2005, Brian Wellington
 * [HttpMime](http://hc.apache.org/httpcomponents-client-ga/httpmime/), Copyright 1999-2013 The Apache Software Foundation
 * [ACRA](http://github.com/ACRA/acra), Copyright 2013 Kevin Gaudin
 * [drag-sort-listview](https://github.com/bauerca/drag-sort-listview), Copyright 2012 Carl Bauer
-* [MenuComponent-Android](https://github.com/mariotaku/MenuComponent-Android), Copyright 2014 Mariotaku Lee
-* [RefreshNow-Android](https://github.com/mariotaku/RefreshNow-Android), Copyright 2014 Mariotaku Lee
 * [AndroidStaggeredGrid](https://github.com/etsy/AndroidStaggeredGrid), Copyright 2013 Etsy
 * [cwac-merge](https://github.com/commonsguy/cwac-merge), Copyright 2013 CommonsWare
 * [cwac-sacklist](https://github.com/commonsguy/cwac-sacklist), Copyright 2013 CommonsWare
 * [SlidingMenu](https://github.com/mariotaku/SlidingMenu) ([Original](https://github.com/jfeinstein10/SlidingMenu)), Copyright 2012 Jeremy Feinstein
-* [holoaccent](https://github.com/negusoft/holoaccent), Copyright 2013 NEGU Soft
-* [IconicDroid](https://github.com/mariotaku/IconicDroid) ([Original](https://github.com/atermenji/IconicDroid)), Copyright 2013 Artur Termenji
+* [ColorPicker](https://github.com/uucky/ColorPicker-Android), Copyright 2015 Uucky & Mariotaku
+* [OkHttp](https://github.com/square/okhttp), Copyright 2014 Square, Inc
+* [Otto](https://github.com/square/otto), Copyright 2012 Square, Inc; Copyright 2010 Google, Inc
+* [ByakuGallery](https://github.com/diegocarloslima/ByakuGallery), Copyright 2013 Diego Carlos Lima
+* [MaterialEditText](https://github.com/rengwuxian/MaterialEditText), Copyright 2014 rengwuxian
+* [Material-ish Progress](https://github.com/pnikosis/materialish-progress), Copyright 2014 Nico Hormazábal
+* [android-gif-drawable](https://github.com/koral--/android-gif-drawable/), Copyright 2015 koral--
 
 ---
 
@@ -113,7 +118,3 @@ Buy me a bread or anything you want :)
 ---
 
 ## Notes ##
-
-<a name="note1" id="md-anchor"><sup>1</sup></a> : There're two versions, one for Android 4.0+, another for Android 1.6 to Android 3.2, there will be less feature for legacy devices, but both of them has Holo style.
-
-<a name="note2" id="md-anchor"><sup>2</sup></a> : Legacy device only support Dark and Light with dark ActionBar theme.

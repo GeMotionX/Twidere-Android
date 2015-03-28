@@ -47,15 +47,14 @@ import android.os.Environment;
 import android.os.Parcelable;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.support.v4.app.DialogFragment;
-import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationCompat.Action;
 import android.support.v4.util.LongSparseArray;
 import android.support.v7.internal.view.SupportMenuInflater;
 import android.support.v7.widget.ActionMenuView;
 import android.support.v7.widget.ActionMenuView.OnMenuItemClickListener;
+import android.support.v7.widget.FixedLinearLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.Adapter;
@@ -65,15 +64,19 @@ import android.support.v7.widget.RecyclerView.ViewHolder;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.view.ActionMode;
+import android.view.ActionMode.Callback;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.View.OnLongClickListener;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.EditText;
 import android.widget.GridView;
 import android.widget.ImageView;
@@ -88,6 +91,7 @@ import org.mariotaku.dynamicgridview.DraggableArrayAdapter;
 import org.mariotaku.twidere.R;
 import org.mariotaku.twidere.app.TwidereApplication;
 import org.mariotaku.twidere.fragment.support.BaseSupportDialogFragment;
+import org.mariotaku.twidere.fragment.support.ViewStatusDialogFragment;
 import org.mariotaku.twidere.model.DraftItem;
 import org.mariotaku.twidere.model.ParcelableAccount;
 import org.mariotaku.twidere.model.ParcelableLocation;
@@ -102,9 +106,8 @@ import org.mariotaku.twidere.service.BackgroundOperationService;
 import org.mariotaku.twidere.task.TwidereAsyncTask;
 import org.mariotaku.twidere.util.AsyncTwitterWrapper;
 import org.mariotaku.twidere.util.ContentValuesCreator;
-import org.mariotaku.twidere.util.ImageLoaderWrapper;
-import org.mariotaku.twidere.util.ImageLoadingHandler;
 import org.mariotaku.twidere.util.MathUtils;
+import org.mariotaku.twidere.util.MediaLoaderWrapper;
 import org.mariotaku.twidere.util.ParseUtils;
 import org.mariotaku.twidere.util.SharedPreferencesWrapper;
 import org.mariotaku.twidere.util.ThemeUtils;
@@ -112,12 +115,10 @@ import org.mariotaku.twidere.util.TwidereArrayUtils;
 import org.mariotaku.twidere.util.TwidereValidator;
 import org.mariotaku.twidere.util.UserColorNameUtils;
 import org.mariotaku.twidere.util.Utils;
-import org.mariotaku.twidere.util.accessor.ViewAccessor;
 import org.mariotaku.twidere.view.ActionIconView;
 import org.mariotaku.twidere.view.BadgeView;
 import org.mariotaku.twidere.view.ShapedImageView;
 import org.mariotaku.twidere.view.StatusTextCountView;
-import org.mariotaku.twidere.view.holder.StatusViewHolder;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -135,7 +136,6 @@ import static android.os.Environment.getExternalStorageState;
 import static android.text.TextUtils.isEmpty;
 import static org.mariotaku.twidere.util.ParseUtils.parseString;
 import static org.mariotaku.twidere.util.ThemeUtils.getComposeThemeResource;
-import static org.mariotaku.twidere.util.ThemeUtils.getWindowContentOverlayForCompose;
 import static org.mariotaku.twidere.util.Utils.addIntentToMenu;
 import static org.mariotaku.twidere.util.Utils.copyStream;
 import static org.mariotaku.twidere.util.Utils.getAccountIds;
@@ -148,8 +148,8 @@ import static org.mariotaku.twidere.util.Utils.getShareStatus;
 import static org.mariotaku.twidere.util.Utils.showErrorMessage;
 import static org.mariotaku.twidere.util.Utils.showMenuItemToast;
 
-public class ComposeActivity extends ThemedActionBarActivity implements TextWatcher, LocationListener,
-        OnMenuItemClickListener, View.OnClickListener, OnEditorActionListener, OnLongClickListener {
+public class ComposeActivity extends ThemedFragmentActivity implements TextWatcher, LocationListener,
+        OnMenuItemClickListener, OnClickListener, OnEditorActionListener, OnLongClickListener, Callback {
 
     private static final String FAKE_IMAGE_LINK = "https://www.example.com/fake_image.jpg";
 
@@ -190,7 +190,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
     private ShapedImageView mProfileImageView;
     private BadgeView mCountView;
     private View mAccountSelectorButton;
-    private ImageLoaderWrapper mImageLoader;
+    private MediaLoaderWrapper mImageLoader;
     private View mLocationContainer;
     private ActionIconView mLocationIcon;
     private TextView mLocationText;
@@ -201,9 +201,37 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
     }
 
-    public void onInvoked() {
-        final boolean isVisible = mAccountSelectorContainer.getVisibility() == View.VISIBLE;
-        mAccountSelectorContainer.setVisibility(isVisible ? View.GONE : View.VISIBLE);
+    @Override
+    public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+        final Window window = getWindow();
+        final Rect rect = new Rect();
+        window.getDecorView().getWindowVisibleDisplayFrame(rect);
+        final View contentView = window.findViewById(android.R.id.content);
+        final int statusBarHeight = rect.top;
+        contentView.getWindowVisibleDisplayFrame(rect);
+        final int paddingTop = statusBarHeight + Utils.getActionBarHeight(this) - rect.top;
+        contentView.setPadding(contentView.getPaddingLeft(), paddingTop,
+                contentView.getPaddingRight(), contentView.getPaddingBottom());
+        return true;
+    }
+
+    @Override
+    public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+        ThemeUtils.wrapMenuIcon(this, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+        return false;
+    }
+
+    @Override
+    public void onDestroyActionMode(ActionMode mode) {
+        final Window window = getWindow();
+        final View contentView = window.findViewById(android.R.id.content);
+        contentView.setPadding(contentView.getPaddingLeft(), 0,
+                contentView.getPaddingRight(), contentView.getPaddingBottom());
     }
 
     @Override
@@ -336,14 +364,10 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
     private void toggleLocation() {
         final boolean attachLocation = mPreferences.getBoolean(KEY_ATTACH_LOCATION, false);
-        if (!attachLocation) {
-            getLocation();
-        } else {
-            mLocationManager.removeUpdates(this);
-        }
         mPreferences.edit().putBoolean(KEY_ATTACH_LOCATION, !attachLocation).apply();
-        setMenu();
+        startLocationUpdateIfEnabled();
         updateLocationState();
+        setMenu();
         updateTextCount();
     }
 
@@ -351,7 +375,6 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
         final boolean attachLocation = mPreferences.getBoolean(KEY_ATTACH_LOCATION, false);
         if (attachLocation) {
             mLocationIcon.setColorFilter(getCurrentThemeColor(), Mode.SRC_ATOP);
-            mLocationText.setText(R.string.getting_location);
         } else {
             mLocationIcon.setColorFilter(mLocationIcon.getDefaultColor(), Mode.SRC_ATOP);
             mLocationText.setText(R.string.no_location);
@@ -485,9 +508,16 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
     @Override
     public void onLocationChanged(final Location location) {
-        if (mRecentLocation == null) {
-            mRecentLocation = location != null ? new ParcelableLocation(location) : null;
+        setRecentLocation(ParcelableLocation.fromLocation(location));
+    }
+
+    private void setRecentLocation(ParcelableLocation location) {
+        if (location != null) {
+            mLocationText.setText(location.getHumanReadableString(3));
+        } else {
+            mLocationText.setText(R.string.unknown_location);
         }
+        mRecentLocation = location;
     }
 
     @Override
@@ -497,6 +527,15 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
     @Override
     public void onProviderEnabled(final String provider) {
+    }
+
+    @NonNull
+    @Override
+    public MenuInflater getMenuInflater() {
+        if (mMenuInflater == null) {
+            mMenuInflater = new SupportMenuInflater(this);
+        }
+        return mMenuInflater;
     }
 
     @Override
@@ -535,13 +574,12 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
     }
 
     @Override
-    public void onSupportContentChanged() {
-        super.onSupportContentChanged();
+    public void onContentChanged() {
+        super.onContentChanged();
         mEditText = (EditText) findViewById(R.id.edit_text);
         mMediaPreviewGrid = (GridView) findViewById(R.id.media_thumbnail_preview);
         mMenuBar = (ActionMenuView) findViewById(R.id.menu_bar);
-        final View composeBottomBar = findViewById(R.id.compose_bottombar);
-        mSendView = composeBottomBar.findViewById(R.id.send);
+        mSendView = findViewById(R.id.send);
         mSendTextCountView = (StatusTextCountView) mSendView.findViewById(R.id.status_text_count);
         mAccountSelector = (RecyclerView) findViewById(R.id.account_selector);
         mAccountSelectorContainer = findViewById(R.id.account_selector_container);
@@ -551,7 +589,6 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
         mLocationContainer = findViewById(R.id.location_container);
         mLocationIcon = (ActionIconView) findViewById(R.id.location_icon);
         mLocationText = (TextView) findViewById(R.id.location_text);
-        ViewAccessor.setBackground(findViewById(R.id.compose_content), getWindowContentOverlayForCompose(this));
     }
 
     public void removeAllMedia(final List<ParcelableMediaUpdate> list) {
@@ -588,7 +625,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
         mValidator = new TwidereValidator(this);
         mImageLoader = app.getImageLoaderWrapper();
         setContentView(R.layout.activity_compose);
-        setSupportProgressBarIndeterminateVisibility(false);
+//        setSupportProgressBarIndeterminateVisibility(false);
         setFinishOnTouchOutside(false);
         final long[] defaultAccountIds = getAccountIds(this);
         if (defaultAccountIds.length <= 0) {
@@ -602,11 +639,12 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
         mMenuBar.setOnMenuItemClickListener(this);
         mEditText.setOnEditorActionListener(mPreferences.getBoolean(KEY_QUICK_SEND, false) ? this : null);
         mEditText.addTextChangedListener(this);
+        mEditText.setCustomSelectionActionModeCallback(this);
         mAccountSelectorContainer.setOnClickListener(this);
         mAccountSelectorButton.setOnClickListener(this);
         mLocationContainer.setOnClickListener(this);
 
-        final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(this);
+        final LinearLayoutManager linearLayoutManager = new FixedLinearLayoutManager(this);
         linearLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
         linearLayoutManager.setStackFromEnd(true);
         mAccountSelector.setLayoutManager(linearLayoutManager);
@@ -697,6 +735,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
         super.onStart();
         mImageUploaderUsed = !ServicePickerPreference.isNoneValue(mPreferences.getString(KEY_MEDIA_UPLOADER, null));
         mStatusShortenerUsed = !ServicePickerPreference.isNoneValue(mPreferences.getString(KEY_STATUS_SHORTENER, null));
+        startLocationUpdateIfEnabled();
         setMenu();
         updateTextCount();
         final int text_size = mPreferences.getInt(KEY_TEXT_SIZE, getDefaultTextSize(this));
@@ -752,23 +791,28 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
      * the best provider of data (GPS, WiFi/cell phone tower lookup, some other
      * mechanism) and finds the last known location.
      */
-    private boolean getLocation() {
+    private boolean startLocationUpdateIfEnabled() {
+        final LocationManager lm = mLocationManager;
+        final boolean attachLocation = mPreferences.getBoolean(KEY_ATTACH_LOCATION, false);
+        if (!attachLocation) {
+            lm.removeUpdates(this);
+            return false;
+        }
         final Criteria criteria = new Criteria();
         criteria.setAccuracy(Criteria.ACCURACY_FINE);
-        final String provider = mLocationManager.getBestProvider(criteria, true);
-
+        final String provider = lm.getBestProvider(criteria, true);
         if (provider != null) {
+            mLocationText.setText(R.string.getting_location);
+            lm.requestLocationUpdates(provider, 0, 0, this);
             final Location location;
-            if (mLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                location = mLocationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
             } else {
-                location = mLocationManager.getLastKnownLocation(provider);
+                location = lm.getLastKnownLocation(provider);
             }
-            if (location == null) {
-                mLocationManager.requestLocationUpdates(provider, 0, 0, this);
-                setProgressVisibility(true);
+            if (location != null) {
+                onLocationChanged(location);
             }
-            mRecentLocation = location != null ? new ParcelableLocation(location) : null;
         } else {
             Toast.makeText(this, R.string.cannot_get_location, Toast.LENGTH_SHORT).show();
         }
@@ -778,10 +822,6 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
     private ParcelableMediaUpdate[] getMedia() {
         final List<ParcelableMediaUpdate> list = getMediaList();
         return list.toArray(new ParcelableMediaUpdate[list.size()]);
-    }
-
-    private int getMediaCount() {
-        return mMediaPreviewAdapter.getCount();
     }
 
     private List<ParcelableMediaUpdate> getMediaList() {
@@ -812,7 +852,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
             new AddMediaTask(this, extraStream, createTempImageUri(), ParcelableMedia.TYPE_IMAGE, false).executeTask();
         } else if (data != null) {
             new AddMediaTask(this, data, createTempImageUri(), ParcelableMedia.TYPE_IMAGE, false).executeTask();
-        } else if (intent.hasExtra(EXTRA_SHARE_SCREENSHOT)) {
+        } else if (intent.hasExtra(EXTRA_SHARE_SCREENSHOT) && Utils.useShareScreenshot()) {
             final Bitmap bitmap = intent.getParcelableExtra(EXTRA_SHARE_SCREENSHOT);
             if (bitmap != null) {
                 try {
@@ -1053,7 +1093,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 //        mMenuBar.show();
     }
 
-    private void setProgressVisibility(final boolean visible) {
+    private void setProgressVisible(final boolean visible) {
 //        mProgress.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
@@ -1087,26 +1127,32 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
         final int tweetLength = mValidator.getTweetLength(text), maxLength = mValidator.getMaxTweetLength();
         if (!mStatusShortenerUsed && tweetLength > maxLength) {
             mEditText.setError(getString(R.string.error_message_status_too_long));
-            final int text_length = mEditText.length();
-            mEditText.setSelection(text_length - (tweetLength - maxLength), text_length);
+            final int textLength = mEditText.length();
+            mEditText.setSelection(textLength - (tweetLength - maxLength), textLength);
             return;
         } else if (!hasMedia && (isEmpty(text) || noReplyContent(text))) {
             mEditText.setError(getString(R.string.error_message_no_content));
             return;
+        } else if (mAccountsAdapter.isSelectionEmpty()) {
+            mEditText.setError(getString(R.string.no_account_selected));
+            return;
         }
-        final boolean attach_location = mPreferences.getBoolean(KEY_ATTACH_LOCATION, false);
-        if (mRecentLocation == null && attach_location) {
-            final Location location;
-            if (mLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                location = mLocationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-            } else {
-                location = null;
-            }
-            mRecentLocation = location != null ? new ParcelableLocation(location) : null;
-        }
+        final boolean attachLocation = mPreferences.getBoolean(KEY_ATTACH_LOCATION, false);
+//        if (mRecentLocation == null && attachLocation) {
+//            final Location location;
+//            if (mLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+//                location = mLocationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+//            } else {
+//                location = null;
+//            }
+//            if (location != null) {
+//                mRecentLocation = new ParcelableLocation(location);
+//            }
+//            setRecentLocation();
+//        }
         final long[] accountIds = mAccountsAdapter.getSelectedAccountIds();
         final boolean isQuote = INTENT_ACTION_QUOTE.equals(getIntent().getAction());
-        final ParcelableLocation statusLocation = attach_location ? mRecentLocation : null;
+        final ParcelableLocation statusLocation = attachLocation ? mRecentLocation : null;
         final boolean linkToQuotedTweet = mPreferences.getBoolean(KEY_LINK_TO_QUOTED_TWEET, true);
         final long inReplyToStatusId = !isQuote || linkToQuotedTweet ? mInReplyToStatusId : -1;
         final boolean isPossiblySensitive = hasMedia && mIsPossiblySensitive;
@@ -1159,14 +1205,14 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
         public void showAccount(AccountIconsAdapter adapter, ParcelableAccount account, boolean isSelected) {
             itemView.setAlpha(isSelected ? 1 : 0.33f);
-            final ImageLoaderWrapper loader = adapter.getImageLoader();
+            final MediaLoaderWrapper loader = adapter.getImageLoader();
             loader.displayProfileImage(iconView, account.profile_image_url);
             iconView.setBorderColor(account.color);
         }
 
         @Override
         public void onClick(View v) {
-            adapter.toggleSelection(getPosition());
+            adapter.toggleSelection(getAdapterPosition());
         }
 
 
@@ -1176,7 +1222,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
         private final ComposeActivity mActivity;
         private final LayoutInflater mInflater;
-        private final ImageLoaderWrapper mImageLoader;
+        private final MediaLoaderWrapper mImageLoader;
         private final LongSparseArray<Boolean> mSelection;
 
         private ParcelableAccount[] mAccounts;
@@ -1188,7 +1234,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
             mSelection = new LongSparseArray<>();
         }
 
-        public ImageLoaderWrapper getImageLoader() {
+        public MediaLoaderWrapper getImageLoader() {
             return mImageLoader;
         }
 
@@ -1220,6 +1266,10 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
             final ParcelableAccount[] result = new ParcelableAccount[selectedCount];
             System.arraycopy(temp, 0, result, 0, result.length);
             return result;
+        }
+
+        public boolean isSelectionEmpty() {
+            return getSelectedAccountIds().length == 0;
         }
 
         public void setSelectedAccountIds(long... accountIds) {
@@ -1340,7 +1390,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
         @Override
         protected void onPostExecute(final Boolean result) {
-            activity.setProgressVisibility(false);
+            activity.setProgressVisible(false);
             activity.addMedia(new ParcelableMediaUpdate(dst.toString(), media_type));
             activity.setMenu();
             activity.updateTextCount();
@@ -1351,7 +1401,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
         @Override
         protected void onPreExecute() {
-            activity.setProgressVisibility(true);
+            activity.setProgressVisible(true);
         }
     }
 
@@ -1387,7 +1437,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
         @Override
         protected void onPostExecute(final Boolean result) {
-            mActivity.setProgressVisibility(false);
+            mActivity.setProgressVisible(false);
             mActivity.removeAllMedia(Arrays.asList(mMedia));
             mActivity.setMenu();
             if (!result) {
@@ -1397,7 +1447,7 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
         @Override
         protected void onPreExecute() {
-            mActivity.setProgressVisibility(true);
+            mActivity.setProgressVisible(true);
         }
     }
 
@@ -1426,19 +1476,19 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
         @Override
         protected void onPostExecute(final Void result) {
-            mActivity.setProgressVisibility(false);
+            mActivity.setProgressVisible(false);
             mActivity.finish();
         }
 
         @Override
         protected void onPreExecute() {
-            mActivity.setProgressVisibility(true);
+            mActivity.setProgressVisible(true);
         }
     }
 
     private static class MediaPreviewAdapter extends DraggableArrayAdapter<ParcelableMediaUpdate> {
 
-        private final ImageLoaderWrapper mImageLoader;
+        private final MediaLoaderWrapper mImageLoader;
 
         public MediaPreviewAdapter(final Context context) {
             super(context, R.layout.grid_item_media_editor);
@@ -1502,68 +1552,15 @@ public class ComposeActivity extends ThemedActionBarActivity implements TextWatc
 
         @Override
         public void getItemOffsets(Rect outRect, View view, RecyclerView parent, State state) {
-            final int pos = parent.getChildPosition(view);
+            final int pos = parent.getChildAdapterPosition(view);
             if (pos == 0) {
                 outRect.set(0, mSpacingNormal, 0, 0);
             } else if (pos == parent.getAdapter().getItemCount() - 1) {
                 outRect.set(0, 0, 0, mSpacingNormal);
             } else {
-//                outRect.set(0, mSpacingSmall, 0, mSpacingSmall);
                 outRect.set(0, 0, 0, 0);
             }
         }
     }
 
-    public static class ViewStatusDialogFragment extends BaseSupportDialogFragment {
-
-        private StatusViewHolder mHolder;
-        private View mStatusContainer;
-
-        public ViewStatusDialogFragment() {
-            setStyle(STYLE_NO_TITLE, 0);
-        }
-
-        @Override
-        public View onCreateView(final LayoutInflater inflater, final ViewGroup parent, final Bundle savedInstanceState) {
-            return inflater.inflate(R.layout.dialog_scrollable_status, parent, false);
-        }
-
-        @Override
-        public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
-            super.onViewCreated(view, savedInstanceState);
-            mStatusContainer = view.findViewById(R.id.status_container);
-            mHolder = new StatusViewHolder(view);
-        }
-
-        @Override
-        public void onActivityCreated(final Bundle savedInstanceState) {
-            super.onActivityCreated(savedInstanceState);
-            final Bundle args = getArguments();
-            if (args == null || args.getParcelable(EXTRA_STATUS) == null) {
-                dismiss();
-                return;
-            }
-            final TwidereApplication application = getApplication();
-            final FragmentActivity activity = getActivity();
-            final ImageLoaderWrapper loader = application.getImageLoaderWrapper();
-            final ImageLoadingHandler handler = new ImageLoadingHandler(R.id.media_preview_progress);
-            final AsyncTwitterWrapper twitter = getTwitterWrapper();
-            final SharedPreferencesWrapper preferences = SharedPreferencesWrapper.getInstance(activity,
-                    SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
-            final ParcelableStatus status = args.getParcelable(EXTRA_STATUS);
-            final int profileImageStyle = Utils.getProfileImageStyle(preferences.getString(KEY_PROFILE_IMAGE_STYLE, null));
-            final int mediaPreviewStyle = Utils.getMediaPreviewStyle(preferences.getString(KEY_MEDIA_PREVIEW_STYLE, null));
-            final boolean nameFirst = preferences.getBoolean(KEY_NAME_FIRST, true);
-            final boolean nicknameOnly = preferences.getBoolean(KEY_NICKNAME_ONLY, false);
-            final boolean displayMediaPreview = preferences.getBoolean(KEY_MEDIA_PREVIEW, false);
-
-            mHolder.displayStatus(activity, loader, handler, twitter, displayMediaPreview, true,
-                    true, nameFirst, nicknameOnly, profileImageStyle, mediaPreviewStyle, status, null);
-            mStatusContainer.findViewById(R.id.item_menu).setVisibility(View.GONE);
-            mStatusContainer.findViewById(R.id.action_buttons).setVisibility(View.GONE);
-            mStatusContainer.findViewById(R.id.reply_retweet_status).setVisibility(View.GONE);
-        }
-
-
-    }
 }

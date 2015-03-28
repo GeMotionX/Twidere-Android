@@ -28,7 +28,7 @@ import org.mariotaku.twidere.R;
 import org.mariotaku.twidere.adapter.iface.IBaseCardAdapter;
 import org.mariotaku.twidere.app.TwidereApplication;
 import org.mariotaku.twidere.model.ParcelableUser;
-import org.mariotaku.twidere.util.ImageLoaderWrapper;
+import org.mariotaku.twidere.util.MediaLoaderWrapper;
 import org.mariotaku.twidere.util.MultiSelectManager;
 import org.mariotaku.twidere.util.Utils;
 import org.mariotaku.twidere.view.holder.UserViewListHolder;
@@ -45,7 +45,7 @@ import static org.mariotaku.twidere.util.Utils.getUserTypeIconRes;
 
 public class ParcelableUsersAdapter extends BaseArrayAdapter<ParcelableUser> implements IBaseCardAdapter {
 
-    private final ImageLoaderWrapper mProfileImageLoader;
+    private final MediaLoaderWrapper mProfileImageLoader;
     private final MultiSelectManager mMultiSelectManager;
     private final Context mContext;
 
@@ -104,9 +104,7 @@ public class ParcelableUsersAdapter extends BaseArrayAdapter<ParcelableUser> imp
         } else {
             holder.profile_type.setImageDrawable(null);
         }
-        final String nick = getUserNickname(mContext, user.id);
-        holder.name.setText(TextUtils.isEmpty(nick) ? user.name : isNicknameOnly() ? nick : mContext.getString(
-                R.string.name_with_nickname, user.name, nick));
+        holder.name.setText(getUserNickname(mContext, user.id, user.name));
         holder.screen_name.setText("@" + user.screen_name);
         holder.description.setVisibility(TextUtils.isEmpty(user.description_unescaped) ? View.GONE : View.VISIBLE);
         holder.description.setText(user.description_unescaped);

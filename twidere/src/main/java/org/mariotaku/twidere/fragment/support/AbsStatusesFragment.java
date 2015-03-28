@@ -1,15 +1,18 @@
 package org.mariotaku.twidere.fragment.support;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.LoaderManager.LoaderCallbacks;
 import android.support.v4.content.Loader;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v4.widget.SwipeRefreshLayout.OnRefreshListener;
+import android.support.v7.widget.FixedLinearLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.PopupMenu;
 import android.support.v7.widget.RecyclerView;
@@ -17,12 +20,16 @@ import android.support.v7.widget.RecyclerView.OnScrollListener;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 
 import com.squareup.otto.Bus;
 import com.squareup.otto.Subscribe;
 
 import org.mariotaku.twidere.R;
+import org.mariotaku.twidere.activity.iface.IControlBarActivity;
+import org.mariotaku.twidere.activity.iface.IControlBarActivity.ControlBarOffsetListener;
+import org.mariotaku.twidere.activity.support.BaseActionBarActivity;
 import org.mariotaku.twidere.adapter.AbsStatusesAdapter;
 import org.mariotaku.twidere.adapter.AbsStatusesAdapter.StatusAdapterListener;
 import org.mariotaku.twidere.adapter.decorator.DividerItemDecoration;
@@ -31,6 +38,10 @@ import org.mariotaku.twidere.fragment.iface.RefreshScrollTopInterface;
 import org.mariotaku.twidere.loader.iface.IExtendedLoader;
 import org.mariotaku.twidere.model.ParcelableStatus;
 import org.mariotaku.twidere.util.AsyncTwitterWrapper;
+import org.mariotaku.twidere.util.ColorUtils;
+import org.mariotaku.twidere.util.ContentListScrollListener;
+import org.mariotaku.twidere.util.ContentListScrollListener.ContentListSupport;
+import org.mariotaku.twidere.util.ReadStateManager;
 import org.mariotaku.twidere.util.SimpleDrawerCallback;
 import org.mariotaku.twidere.util.ThemeUtils;
 import org.mariotaku.twidere.util.Utils;
@@ -39,46 +50,29 @@ import org.mariotaku.twidere.view.HeaderDrawerLayout.DrawerCallback;
 import org.mariotaku.twidere.view.holder.GapViewHolder;
 import org.mariotaku.twidere.view.holder.StatusViewHolder;
 
+import edu.tsinghua.spice.Utilies.SpiceProfilingUtil;
+
 import static org.mariotaku.twidere.util.Utils.setMenuForStatus;
 
 /**
  * Created by mariotaku on 14/11/5.
  */
 public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment implements LoaderCallbacks<Data>,
-        OnRefreshListener, DrawerCallback, RefreshScrollTopInterface, StatusAdapterListener {
-
+        OnRefreshListener, DrawerCallback, RefreshScrollTopInterface, StatusAdapterListener,
+        ControlBarOffsetListener, ContentListSupport {
 
     private final Object mStatusesBusCallback;
     private AbsStatusesAdapter<Data> mAdapter;
     private LinearLayoutManager mLayoutManager;
-    private View mContentView;
     private SharedPreferences mPreferences;
     private View mProgressContainer;
     private SwipeRefreshLayout mSwipeRefreshLayout;
     private RecyclerView mRecyclerView;
     private SimpleDrawerCallback mDrawerCallback;
-
-    private OnScrollListener mOnScrollListener = new OnScrollListener() {
-
-        private int mScrollState;
-
-        @Override
-        public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
-            super.onScrollStateChanged(recyclerView, newState);
-            mScrollState = newState;
-        }
-
-        @Override
-        public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-            final LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-            if (isRefreshing()) return;
-            if (mAdapter.hasLoadMoreIndicator() && mScrollState != RecyclerView.SCROLL_STATE_IDLE
-                    && layoutManager.findLastVisibleItemPosition() == mAdapter.getItemCount() - 1) {
-                onLoadMoreStatuses();
-            }
-        }
-    };
+    private Rect mSystemWindowsInsets = new Rect();
+    private int mControlBarOffsetPixels;
     private PopupMenu mPopupMenu;
+    private ReadStateManager mReadStateManager;
 
     protected AbsStatusesFragment() {
         mStatusesBusCallback = createMessageBusCallback();
@@ -119,10 +113,6 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
         mDrawerCallback.topChanged(offset);
     }
 
-    public AbsStatusesAdapter<Data> getAdapter() {
-        return mAdapter;
-    }
-
     public SharedPreferences getSharedPreferences() {
         if (mPreferences != null) return mPreferences;
         return mPreferences = getSharedPreferences(SHARED_PREFERENCES_NAME, Context.MODE_PRIVATE);
@@ -130,12 +120,132 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
 
     public abstract int getStatuses(long[] accountIds, long[] maxIds, long[] sinceIds);
 
-    public boolean isRefreshing() {
-        return mSwipeRefreshLayout.isRefreshing();
+    public abstract boolean isRefreshing();
+
+    public AbsStatusesAdapter<Data> getAdapter() {
+        return mAdapter;
+    }
+
+    public void setControlVisible(boolean visible) {
+        final FragmentActivity activity = getActivity();
+        if (activity instanceof BaseActionBarActivity) {
+            ((BaseActionBarActivity) activity).setControlBarVisibleAnimate(visible);
+        }
     }
 
     public void setRefreshing(boolean refreshing) {
+        if (refreshing == mSwipeRefreshLayout.isRefreshing()) return;
+        if (!refreshing) updateRefreshProgressOffset();
         mSwipeRefreshLayout.setRefreshing(refreshing);
+    }
+
+    @Override
+    public void onAttach(Activity activity) {
+        super.onAttach(activity);
+        if (activity instanceof IControlBarActivity) {
+            ((IControlBarActivity) activity).registerControlBarOffsetListener(this);
+        }
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        return inflater.inflate(R.layout.fragment_recycler_view, container, false);
+    }
+
+    @Override
+    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+        mReadStateManager = getReadStateManager();
+        final View view = getView();
+        if (view == null) throw new AssertionError();
+        final Context context = view.getContext();
+        final boolean compact = Utils.isCompactCards(context);
+        mDrawerCallback = new SimpleDrawerCallback(mRecyclerView);
+        mSwipeRefreshLayout.setOnRefreshListener(this);
+        mSwipeRefreshLayout.setColorSchemeColors(ThemeUtils.getUserAccentColor(context));
+        final int backgroundColor = ThemeUtils.getThemeBackgroundColor(context);
+        final int colorRes = ColorUtils.getContrastYIQ(backgroundColor,
+                R.color.bg_refresh_progress_color_light, R.color.bg_refresh_progress_color_dark);
+        mSwipeRefreshLayout.setProgressBackgroundColorSchemeResource(colorRes);
+        mAdapter = onCreateAdapter(context, compact);
+        mLayoutManager = new FixedLinearLayoutManager(context);
+        mLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
+        mRecyclerView.setLayoutManager(mLayoutManager);
+        mRecyclerView.setHasFixedSize(true);
+        if (compact) {
+            mRecyclerView.addItemDecoration(new DividerItemDecoration(context, mLayoutManager.getOrientation()));
+        }
+        mRecyclerView.setAdapter(mAdapter);
+
+        final ContentListScrollListener scrollListener = new ContentListScrollListener(this);
+        scrollListener.setTouchSlop(ViewConfiguration.get(context).getScaledTouchSlop());
+        scrollListener.setOnScrollListener(new OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    saveReadPosition();
+                }
+            }
+        });
+        mRecyclerView.setOnScrollListener(scrollListener);
+        mAdapter.setListener(this);
+        final Bundle loaderArgs = new Bundle(getArguments());
+        loaderArgs.putBoolean(EXTRA_FROM_USER, true);
+        getLoaderManager().initLoader(0, loaderArgs, this);
+        setListShown(false);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        final Bus bus = TwidereApplication.getInstance(getActivity()).getMessageBus();
+        bus.register(mStatusesBusCallback);
+    }
+
+    @Override
+    public void onStop() {
+        final Bus bus = TwidereApplication.getInstance(getActivity()).getMessageBus();
+        bus.unregister(mStatusesBusCallback);
+        super.onStop();
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (mPopupMenu != null) {
+            mPopupMenu.dismiss();
+        }
+        super.onDestroyView();
+    }
+
+    @Override
+    public void onBaseViewCreated(View view, @Nullable Bundle savedInstanceState) {
+        super.onBaseViewCreated(view, savedInstanceState);
+        mProgressContainer = view.findViewById(R.id.progress_container);
+        mSwipeRefreshLayout = (SwipeRefreshLayout) view.findViewById(R.id.swipe_layout);
+        mRecyclerView = (RecyclerView) view.findViewById(R.id.recycler_view);
+    }
+
+    @Override
+    public void onDetach() {
+        final FragmentActivity activity = getActivity();
+        if (activity instanceof IControlBarActivity) {
+            ((IControlBarActivity) activity).unregisterControlBarOffsetListener(this);
+        }
+        super.onDetach();
+    }
+
+    @Override
+    protected void fitSystemWindows(Rect insets) {
+        super.fitSystemWindows(insets);
+        mRecyclerView.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+        mSystemWindowsInsets.set(insets);
+        updateRefreshProgressOffset();
+    }
+
+    @Override
+    public void onControlBarOffsetChanged(IControlBarActivity activity, float offset) {
+        mControlBarOffsetPixels = Math.round(activity.getControlBarHeight() * (1 - offset));
+        updateRefreshProgressOffset();
     }
 
     @Override
@@ -169,7 +279,7 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
             lastVisibleTop = 0;
         }
         mAdapter.setData(data);
-        if (!(data instanceof IExtendedLoader) || ((IExtendedLoader) data).isFromUser()) {
+        if (!(loader instanceof IExtendedLoader) || ((IExtendedLoader) loader).isFromUser()) {
             mAdapter.setLoadMoreIndicatorEnabled(hasMoreData(data));
             int pos = -1;
             for (int i = 0; i < mAdapter.getItemCount(); i++) {
@@ -182,76 +292,26 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
                 mLayoutManager.scrollToPositionWithOffset(pos, lastVisibleTop - mLayoutManager.getPaddingTop());
             }
         }
-        if (data instanceof IExtendedLoader) {
-            ((IExtendedLoader) data).setFromUser(false);
+        if (loader instanceof IExtendedLoader) {
+            ((IExtendedLoader) loader).setFromUser(false);
         }
         setListShown(true);
     }
 
     @Override
     public void onLoaderReset(Loader<Data> loader) {
+        if (loader instanceof IExtendedLoader) {
+            ((IExtendedLoader) loader).setFromUser(false);
+        }
     }
 
     public abstract Loader<Data> onCreateStatusesLoader(final Context context, final Bundle args,
                                                         final boolean fromUser);
 
     @Override
-    public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_recycler_view, container, false);
-    }
-
-    @Override
-    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
-        final View view = getView();
-        if (view == null) throw new AssertionError();
-        final Context context = view.getContext();
-        final boolean compact = Utils.isCompactCards(context);
-        mDrawerCallback = new SimpleDrawerCallback(mRecyclerView);
-        mSwipeRefreshLayout.setOnRefreshListener(this);
-        mSwipeRefreshLayout.setColorSchemeColors(ThemeUtils.getUserAccentColor(context));
-        mAdapter = onCreateAdapter(context, compact);
-        mLayoutManager = new LinearLayoutManager(context);
-        mLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
-        mRecyclerView.setLayoutManager(mLayoutManager);
-        if (compact) {
-            mRecyclerView.addItemDecoration(new DividerItemDecoration(context, mLayoutManager.getOrientation()));
-        }
-        mRecyclerView.setAdapter(mAdapter);
-        mRecyclerView.setOnScrollListener(mOnScrollListener);
-        mAdapter.setListener(this);
-        final Bundle loaderArgs = new Bundle(getArguments());
-        loaderArgs.putBoolean(EXTRA_FROM_USER, true);
-        getLoaderManager().initLoader(0, loaderArgs, this);
-        setListShown(false);
-    }
-
-    @Override
-    public void onStart() {
-        super.onStart();
-        final Bus bus = TwidereApplication.getInstance(getActivity()).getMessageBus();
-        bus.register(mStatusesBusCallback);
-    }
-
-    @Override
-    public void onStop() {
-        final Bus bus = TwidereApplication.getInstance(getActivity()).getMessageBus();
-        bus.unregister(mStatusesBusCallback);
-        super.onStop();
-    }
-
-    @Override
-    public void onDestroyView() {
-        if (mPopupMenu != null) {
-            mPopupMenu.dismiss();
-        }
-        super.onDestroyView();
-    }
-
-    @Override
     public void onGapClick(GapViewHolder holder, int position) {
         final ParcelableStatus status = mAdapter.getStatus(position);
-        final long sinceId = position + 1 < mAdapter.getStatusCount() ? mAdapter.getStatus(position + 1).id : -1;
+        final long sinceId = position + 1 < mAdapter.getStatusesCount() ? mAdapter.getStatus(position + 1).id : -1;
         final long[] accountIds = {status.account_id};
         final long[] maxIds = {status.id};
         final long[] sinceIds = {sinceId};
@@ -262,13 +322,13 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
     public void onStatusActionClick(StatusViewHolder holder, int id, int position) {
         final ParcelableStatus status = mAdapter.getStatus(position);
         if (status == null) return;
+        final FragmentActivity activity = getActivity();
         switch (id) {
             case R.id.reply_count: {
-                final Context context = getActivity();
                 final Intent intent = new Intent(INTENT_ACTION_REPLY);
-                intent.setPackage(context.getPackageName());
+                intent.setPackage(activity.getPackageName());
                 intent.putExtra(EXTRA_STATUS, status);
-                context.startActivity(intent);
+                activity.startActivity(intent);
                 break;
             }
             case R.id.retweet_count: {
@@ -280,8 +340,20 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
                 if (twitter == null) return;
                 if (status.is_favorite) {
                     twitter.destroyFavoriteAsync(status.account_id, status.id);
+                    //spice
+                    SpiceProfilingUtil.profile(activity, status.account_id, status.id + ",Unfavor,"
+                            + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count + "," + status.timestamp);
+                    SpiceProfilingUtil.log(activity, status.id + ",Unfavor,"
+                            + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count + "," + status.timestamp);
+                    //end
                 } else {
                     twitter.createFavoriteAsync(status.account_id, status.id);
+                    //spice
+                    SpiceProfilingUtil.profile(activity, status.account_id, status.id + ",Favor,"
+                            + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count + "," + status.timestamp);
+                    SpiceProfilingUtil.log(activity, status.id + ",Favor,"
+                            + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count + "," + status.timestamp);
+                    //end
                 }
                 break;
             }
@@ -312,21 +384,6 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
     }
 
     @Override
-    public void onBaseViewCreated(View view, @Nullable Bundle savedInstanceState) {
-        super.onBaseViewCreated(view, savedInstanceState);
-        mContentView = view.findViewById(R.id.fragment_content);
-        mProgressContainer = view.findViewById(R.id.progress_container);
-        mSwipeRefreshLayout = (SwipeRefreshLayout) view.findViewById(R.id.swipe_layout);
-        mRecyclerView = (RecyclerView) view.findViewById(R.id.recycler_view);
-    }
-
-    @Override
-    protected void fitSystemWindows(Rect insets) {
-        super.fitSystemWindows(insets);
-        mContentView.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-    }
-
-    @Override
     public boolean scrollToStart() {
         final AsyncTwitterWrapper twitter = getTwitterWrapper();
         final int tabPosition = getTabPosition();
@@ -334,6 +391,7 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
             twitter.clearUnreadCountAsync(tabPosition);
         }
         mRecyclerView.smoothScrollToPosition(0);
+//        mRecyclerView.scrollToPosition(0);
         return true;
     }
 
@@ -351,17 +409,38 @@ public abstract class AbsStatusesFragment<Data> extends BaseSupportFragment impl
         mAdapter.setData(data);
     }
 
+    protected String getReadPositionTag() {
+        return null;
+    }
+
     protected abstract boolean hasMoreData(Data data);
 
     protected abstract AbsStatusesAdapter<Data> onCreateAdapter(Context context, boolean compact);
 
-    protected abstract void onLoadMoreStatuses();
+    protected void saveReadPosition() {
+        final String readPositionTag = getReadPositionTag();
+        if (readPositionTag == null) return;
+        final int position = mLayoutManager.findFirstVisibleItemPosition();
+        if (position == RecyclerView.NO_POSITION) return;
+        final ParcelableStatus status = mAdapter.getStatus(position);
+        if (status == null) return;
+        mReadStateManager.setPosition(readPositionTag, status.id);
+    }
 
     private void setListShown(boolean shown) {
         mProgressContainer.setVisibility(shown ? View.GONE : View.VISIBLE);
         mSwipeRefreshLayout.setVisibility(shown ? View.VISIBLE : View.GONE);
     }
 
+    private void updateRefreshProgressOffset() {
+        if (mSystemWindowsInsets.top == 0 || mSwipeRefreshLayout == null || isRefreshing()) return;
+        final float density = getResources().getDisplayMetrics().density;
+        final int progressCircleDiameter = mSwipeRefreshLayout.getProgressCircleDiameter();
+        final int swipeStart = (mSystemWindowsInsets.top - mControlBarOffsetPixels) - progressCircleDiameter;
+        // 64: SwipeRefreshLayout.DEFAULT_CIRCLE_TARGET
+        final int swipeDistance = Math.round(64 * density);
+        mSwipeRefreshLayout.setProgressViewOffset(true, swipeStart, swipeStart + swipeDistance);
+    }
 
     protected final class StatusesBusCallback {
 

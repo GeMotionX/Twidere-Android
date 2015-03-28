@@ -22,7 +22,6 @@ package org.mariotaku.twidere.util;
 import android.app.ActionBar;
 import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
@@ -32,7 +31,6 @@ import android.graphics.PorterDuff.Mode;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.LayerDrawable;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.v7.internal.view.menu.ActionMenuItemView;
@@ -199,8 +197,31 @@ public class ThemeUtils implements Constants {
                 k++;
             }
         }
+    }
 
 
+    public static void wrapMenuIcon(Context context, Menu menu, int... excludeGroups) {
+        final int backgroundColor = ThemeUtils.getThemeBackgroundColor(context);
+        wrapMenuIcon(context, backgroundColor, backgroundColor, menu, excludeGroups);
+    }
+
+    public static void wrapMenuIcon(Context context, int backgroundColor, int popupBackgroundColor,
+                                    Menu menu, int... excludeGroups) {
+        final Resources resources = context.getResources();
+        final int colorDark = resources.getColor(R.color.action_icon_dark);
+        final int colorLight = resources.getColor(R.color.action_icon_light);
+        final int itemColor = ColorUtils.getContrastYIQ(backgroundColor, colorDark, colorLight);
+        final int popupItemColor = ColorUtils.getContrastYIQ(popupBackgroundColor, colorDark, colorLight);
+        for (int i = 0, j = menu.size(), k = 0; i < j; i++) {
+            final MenuItem item = menu.getItem(i);
+            wrapMenuItemIcon(item, itemColor, excludeGroups);
+            if (item.hasSubMenu()) {
+                wrapMenuIcon(menu, popupItemColor, popupItemColor, excludeGroups);
+            }
+            if (item.isVisible()) {
+                k++;
+            }
+        }
     }
 
     public static void applyThemeAlphaToDrawable(final Context context, final Drawable d) {
@@ -330,6 +351,7 @@ public class ThemeUtils implements Constants {
             final CompoundButton compoundButton = (CompoundButton) view;
             ViewAccessor.setButtonTintList(compoundButton, tintList);
         }
+        // TODO support TintableBackgroundView
     }
 
 
@@ -375,20 +397,6 @@ public class ThemeUtils implements Constants {
         final Drawable d = a.getDrawable(0);
         a.recycle();
         return applyActionBarDrawable(context, d, isTransparentBackground(themeRes));
-    }
-
-    public static int getActionBarThemeResource(final Context context) {
-        final TypedArray a = context.obtainStyledAttributes(new int[]{R.attr.actionBarTheme,
-                R.attr.actionBarWidgetTheme, android.R.attr.actionBarTheme,
-                android.R.attr.actionBarWidgetTheme});
-        final int resId;
-        if (a.hasValue(0) || a.hasValue(1)) {
-            resId = a.hasValue(0) ? a.getResourceId(0, 0) : a.getResourceId(1, 0);
-        } else {
-            resId = a.hasValue(2) ? a.getResourceId(2, 0) : a.getResourceId(3, 0);
-        }
-        a.recycle();
-        return resId;
     }
 
     public static Context getActionBarContext(final Context context) {
@@ -438,10 +446,6 @@ public class ThemeUtils implements Constants {
         final Drawable d = a.getDrawable(0);
         a.recycle();
         return applyActionBarDrawable(context, d, isTransparentBackground(themeRes));
-    }
-
-    public static int getActionIconColor(final Context context) {
-        return getActionIconColor(getThemeResource(context));
     }
 
     public static int getActionIconColor(final int themeRes) {
@@ -856,11 +860,6 @@ public class ThemeUtils implements Constants {
         return d;
     }
 
-    public static Drawable getWindowContentOverlayForCompose(final Context context) {
-        final int themeRes = getThemeResource(context);
-        return getWindowContentOverlay(new ContextThemeWrapper(context, themeRes));
-    }
-
     public static boolean isDarkTheme(final Context context) {
         return isDarkTheme(getThemeResource(context));
     }
@@ -880,18 +879,6 @@ public class ThemeUtils implements Constants {
         return false;
     }
 
-    public static boolean isFloatingWindow(final Context context) {
-
-        final TypedArray a = context.obtainStyledAttributes(new int[]{android.R.attr.windowIsFloating});
-        final boolean b = a.getBoolean(0, false);
-        a.recycle();
-        return b;
-    }
-
-    public static boolean isSolidBackground(final Context context) {
-        return VALUE_THEME_BACKGROUND_SOLID.equals(getThemeBackgroundOption(context));
-    }
-
     public static boolean isTransparentBackground(final Context context) {
         return isTransparentBackground(getThemeResource(context));
     }
@@ -905,31 +892,6 @@ public class ThemeUtils implements Constants {
                 return true;
         }
         return false;
-    }
-
-    public static void notifyStatusBarColorChanged(final Context context, final int themeResource,
-                                                   final int accentColor, final int backgroundAlpha) {
-        final Intent intent = new Intent("com.mohammadag.colouredstatusbar.ChangeStatusBarColor");
-//        if (isColoredActionBar(themeResource)) {
-//            intent.putExtra("status_bar_color", backgroundAlpha << 24 | accentColor);
-//        } else {
-//            if (isLightActionBar(themeResource)) {
-//                intent.putExtra("status_bar_color", backgroundAlpha << 24 | 0xFFDDDDDD);
-//            } else {
-//                intent.putExtra("status_bar_color", backgroundAlpha << 24 | 0xFF222222);
-//            }
-//        }
-//        if (isLightActionBar(themeResource)) {
-//            intent.putExtra("status_bar_icons_color", Color.DKGRAY);
-//        } else {
-//            intent.putExtra("status_bar_icons_color", Color.WHITE);
-//        }
-        // Please note that these are not yet implemented!!!
-        // You're free to include them in your code so that when they
-        // are implemented, your app will work out of the box.
-        intent.putExtra("navigation_bar_color", Color.BLACK);
-        intent.putExtra("navigation_bar_icon_color", Color.WHITE);
-        context.sendOrderedBroadcast(intent, null);
     }
 
     public static void overrideActivityCloseAnimation(final Activity activity) {
@@ -971,24 +933,10 @@ public class ThemeUtils implements Constants {
     }
 
 
-    public static boolean shouldApplyColorFilterToActionIcons(final Context context) {
-        return false;
-    }
-
-    public static boolean shouldApplyColorFilterToActionIcons(final int res) {
-        return false;
-    }
-
     private static Drawable applyActionBarDrawable(final Context context, final Drawable d, final boolean applyAlpha) {
         if (d == null) return null;
         d.mutate();
-        if (d instanceof LayerDrawable) {
-            final Drawable colorLayer = ((LayerDrawable) d).findDrawableByLayerId(R.id.color_layer);
-            if (colorLayer != null) {
-                final int color = getUserAccentColor(context);
-                colorLayer.setColorFilter(color, PorterDuff.Mode.MULTIPLY);
-            }
-        }
+//        DrawableCompat.setTint(d, getUserAccentColor(context));
         if (applyAlpha) {
             d.setAlpha(getThemeAlpha(context));
         }
@@ -1001,14 +949,6 @@ public class ThemeUtils implements Constants {
         final Class<?> viewCls = Class.forName(className);
         final Constructor<?> constructor = viewCls.getConstructor(Context.class, AttributeSet.class);
         return (View) constructor.newInstance(context, attrs);
-    }
-
-    public static int findAttributeResourceValue(AttributeSet attrs, String name, int defaultValue) {
-        for (int i = 0, j = attrs.getAttributeCount(); i < j; i++) {
-            if (attrs.getAttributeName(i).equals(name))
-                return attrs.getAttributeResourceValue(i, defaultValue);
-        }
-        return defaultValue;
     }
 
     public static int getThemeColor(Context context, int themeResourceId) {

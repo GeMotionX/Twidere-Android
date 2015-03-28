@@ -22,11 +22,11 @@ package org.mariotaku.twidere.adapter.iface;
 import android.widget.ListAdapter;
 
 import org.mariotaku.twidere.Constants;
-import org.mariotaku.twidere.util.ImageLoaderWrapper;
+import org.mariotaku.twidere.util.MediaLoaderWrapper;
 
 public interface IBaseAdapter extends Constants, ListAdapter {
 
-	public ImageLoaderWrapper getImageLoader();
+	public MediaLoaderWrapper getImageLoader();
 
     public int getLinkHighlightOption();
 
@@ -35,8 +35,6 @@ public interface IBaseAdapter extends Constants, ListAdapter {
 	public boolean isDisplayNameFirst();
 
 	public boolean isDisplayProfileImage();
-
-	public boolean isNicknameOnly();
 
 	public boolean isShowAccountColor();
 
@@ -47,8 +45,6 @@ public interface IBaseAdapter extends Constants, ListAdapter {
 	public void setDisplayProfileImage(boolean display);
 
     public void setLinkHighlightOption(String option);
-
-	public void setNicknameOnly(boolean nicknameOnly);
 
 	public void setShowAccountColor(boolean show);
 

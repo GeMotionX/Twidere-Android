@@ -29,6 +29,10 @@ import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.net.Uri;
+import android.nfc.NdefMessage;
+import android.nfc.NdefRecord;
+import android.nfc.NfcAdapter.CreateNdefMessageCallback;
+import android.nfc.NfcEvent;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
@@ -40,13 +44,13 @@ import android.support.v4.content.Loader;
 import android.support.v4.util.Pair;
 import android.support.v7.widget.ActionMenuView;
 import android.support.v7.widget.CardView;
+import android.support.v7.widget.FixedLinearLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.Adapter;
 import android.support.v7.widget.RecyclerView.LayoutParams;
 import android.support.v7.widget.RecyclerView.ViewHolder;
 import android.text.Html;
-import android.text.TextUtils;
 import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -83,9 +87,9 @@ import org.mariotaku.twidere.text.method.StatusContentMovementMethod;
 import org.mariotaku.twidere.util.AsyncTwitterWrapper;
 import org.mariotaku.twidere.util.ClipboardUtils;
 import org.mariotaku.twidere.util.CompareUtils;
-import org.mariotaku.twidere.util.ImageLoaderWrapper;
 import org.mariotaku.twidere.util.ImageLoadingHandler;
-import org.mariotaku.twidere.util.StatisticUtils;
+import org.mariotaku.twidere.util.LinkCreator;
+import org.mariotaku.twidere.util.MediaLoaderWrapper;
 import org.mariotaku.twidere.util.StatusLinkClickHandler;
 import org.mariotaku.twidere.util.ThemeUtils;
 import org.mariotaku.twidere.util.TwidereLinkify;
@@ -100,13 +104,14 @@ import org.mariotaku.twidere.view.holder.GapViewHolder;
 import org.mariotaku.twidere.view.holder.LoadIndicatorViewHolder;
 import org.mariotaku.twidere.view.holder.StatusViewHolder;
 
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import edu.tsinghua.spice.Utilies.SpiceProfilingUtil;
+import edu.tsinghua.spice.Utilies.TypeMappingUtil;
 import twitter4j.TwitterException;
 
 import static android.text.TextUtils.isEmpty;
@@ -129,7 +134,8 @@ import static org.mariotaku.twidere.util.Utils.showOkMessage;
  * Created by mariotaku on 14/12/5.
  */
 public class StatusFragment extends BaseSupportFragment
-        implements LoaderCallbacks<SingleResponse<ParcelableStatus>>, OnMediaClickListener, StatusAdapterListener {
+        implements LoaderCallbacks<SingleResponse<ParcelableStatus>>, OnMediaClickListener,
+        StatusAdapterListener {
 
     private static final int LOADER_ID_DETAIL_STATUS = 1;
     private static final int LOADER_ID_STATUS_REPLIES = 2;
@@ -154,9 +160,11 @@ public class StatusFragment extends BaseSupportFragment
             final long statusId = args.getLong(EXTRA_STATUS_ID, -1);
             final long maxId = args.getLong(EXTRA_MAX_ID, -1);
             final long sinceId = args.getLong(EXTRA_SINCE_ID, -1);
+
             final StatusRepliesLoader loader = new StatusRepliesLoader(getActivity(), accountId,
                     screenName, statusId, maxId, sinceId, null, null, 0, true);
             loader.setComparator(ParcelableStatus.REVERSE_ID_COMPARATOR);
+
             return loader;
         }
 
@@ -170,6 +178,11 @@ public class StatusFragment extends BaseSupportFragment
 
         }
     };
+
+
+    private ParcelableStatus getStatus() {
+        return mStatusAdapter.getStatus();
+    }
 
     @Override
     public void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
@@ -212,6 +225,16 @@ public class StatusFragment extends BaseSupportFragment
         if (view == null) throw new AssertionError();
         final Context context = view.getContext();
         final boolean compact = Utils.isCompactCards(context);
+        Utils.setNdefPushMessageCallback(getActivity(), new CreateNdefMessageCallback() {
+            @Override
+            public NdefMessage createNdefMessage(NfcEvent event) {
+                final ParcelableStatus status = getStatus();
+                if (status == null) return null;
+                return new NdefMessage(new NdefRecord[]{
+                        NdefRecord.createUri(LinkCreator.getTwitterStatusLink(status.user_screen_name, status.id)),
+                });
+            }
+        });
         mLayoutManager = new StatusListLinearLayoutManager(context, mRecyclerView);
         mItemDecoration = new DividerItemDecoration(context, mLayoutManager.getOrientation());
         if (compact) {
@@ -286,7 +309,13 @@ public class StatusFragment extends BaseSupportFragment
     public void onMediaClick(View view, ParcelableMedia media, long accountId) {
         final ParcelableStatus status = mStatusAdapter.getStatus();
         if (status == null) return;
-        Utils.openMediaDirectly(getActivity(), accountId, media, status.media);
+        Utils.openMediaDirectly(getActivity(), accountId, status, media, status.media);
+        //spice
+        SpiceProfilingUtil.log(getActivity(),
+                status.id + ",Clicked," + accountId + "," + status.user_id + "," + status.text_plain.length() + "," + media.media_url + "," + TypeMappingUtil.getMediaType(media.type) + "," + status.timestamp);
+        SpiceProfilingUtil.profile(getActivity(), accountId,
+                status.id + ",Clicked," + accountId + "," + status.user_id + "," + status.text_plain.length() + "," + media.media_url + "," + TypeMappingUtil.getMediaType(media.type) + "," + status.timestamp);
+        //end
     }
 
     @Override
@@ -325,11 +354,6 @@ public class StatusFragment extends BaseSupportFragment
                 final int position = mStatusAdapter.findPositionById(itemId);
                 mLayoutManager.scrollToPositionWithOffset(position, top);
             }
-            try {
-                StatisticUtils.writeStatusOpen(status, null, 0);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
             setState(STATE_LOADED);
         } else {
             //TODO show errors
@@ -357,6 +381,35 @@ public class StatusFragment extends BaseSupportFragment
         }
         getLoaderManager().initLoader(LOADER_ID_STATUS_REPLIES, args, mRepliesLoaderCallback);
         mRepliesLoaderInitialized = true;
+        //spice
+        if (status.media == null) {
+            SpiceProfilingUtil.profile(getActivity(), status.account_id,
+                    status.id + ",Words," + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count
+                            + "," + status.text_plain.length() + "," + status.timestamp);
+            SpiceProfilingUtil.log(getActivity(), status.id + ",Words," + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count
+                    + "," + status.text_plain.length() + "," + status.timestamp);
+        } else {
+            for (final ParcelableMedia spiceMedia : status.media) {
+                if (TypeMappingUtil.getMediaType(spiceMedia.type).equals("image")) {
+                    SpiceProfilingUtil.profile(getActivity(), status.account_id,
+                            status.id + ",PreviewM," + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count
+                                    + "," + status.text_plain.length() + "," + TypeMappingUtil.getMediaType(spiceMedia.type) + "," + spiceMedia.media_url + "," + spiceMedia.width + "x" + spiceMedia.height + ","
+                                    + status.timestamp);
+                    SpiceProfilingUtil.log(getActivity(),
+                            status.id + ",PreviewM," + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count
+                                    + "," + status.text_plain.length() + "," + TypeMappingUtil.getMediaType(spiceMedia.type) + "," + spiceMedia.media_url + "," + spiceMedia.width + "x" + spiceMedia.height + ","
+                                    + status.timestamp);
+                } else {
+                    SpiceProfilingUtil.profile(getActivity(), status.account_id,
+                            status.id + ",PreviewO," + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count
+                                    + "," + status.text_plain.length() + "," + TypeMappingUtil.getMediaType(spiceMedia.type) + "," + spiceMedia.media_url + "," + status.timestamp);
+                    SpiceProfilingUtil.log(getActivity(),
+                            status.id + ",PreviewO," + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count
+                                    + "," + status.text_plain.length() + "," + TypeMappingUtil.getMediaType(spiceMedia.type) + "," + spiceMedia.media_url + "," + status.timestamp);
+                }
+            }
+        }
+        //end
     }
 
     private void setConversation(List<ParcelableStatus> data) {
@@ -400,10 +453,10 @@ public class StatusFragment extends BaseSupportFragment
         private final Context mContext;
         private final StatusFragment mFragment;
         private final LayoutInflater mInflater;
-        private final ImageLoaderWrapper mImageLoader;
+        private final MediaLoaderWrapper mImageLoader;
         private final ImageLoadingHandler mImageLoadingHandler;
 
-        private final boolean mNameFirst, mNicknameOnly;
+        private final boolean mNameFirst;
         private final int mCardLayoutResource;
         private final int mTextSize;
         private final int mCardBackgroundColor;
@@ -430,7 +483,6 @@ public class StatusFragment extends BaseSupportFragment
             mImageLoadingHandler = new ImageLoadingHandler(R.id.media_preview_progress);
             mCardBackgroundColor = ThemeUtils.getCardBackgroundColor(context);
             mNameFirst = preferences.getBoolean(KEY_NAME_FIRST, true);
-            mNicknameOnly = preferences.getBoolean(KEY_NICKNAME_ONLY, true);
             mTextSize = preferences.getInt(KEY_TEXT_SIZE, res.getInteger(R.integer.default_text_size));
             mProfileImageStyle = Utils.getProfileImageStyle(preferences.getString(KEY_PROFILE_IMAGE_STYLE, null));
             mIsCompact = compact;
@@ -453,7 +505,7 @@ public class StatusFragment extends BaseSupportFragment
             return mFragment;
         }
 
-        public ImageLoaderWrapper getImageLoader() {
+        public MediaLoaderWrapper getImageLoader() {
             return mImageLoader;
         }
 
@@ -472,16 +524,16 @@ public class StatusFragment extends BaseSupportFragment
             if (position == getItemCount() - 1) {
                 return null;
             } else if (position < conversationCount) {
-                return mConversation.get(position);
+                return mConversation != null ? mConversation.get(position) : null;
             } else if (position > conversationCount) {
-                return mReplies.get(position - conversationCount - 1);
+                return mReplies != null ? mReplies.get(position - conversationCount - 1) : null;
             } else {
                 return mStatus;
             }
         }
 
         @Override
-        public int getStatusCount() {
+        public int getStatusesCount() {
             return getConversationCount() + 1 + getRepliesCount() + 1;
         }
 
@@ -548,6 +600,16 @@ public class StatusFragment extends BaseSupportFragment
             return mTextSize;
         }
 
+        @Override
+        public boolean hasLoadMoreIndicator() {
+            return false;
+        }
+
+        @Override
+        public void setLoadMoreIndicatorEnabled(boolean enabled) {
+
+        }
+
         public ParcelableStatus getStatus() {
             return mStatus;
         }
@@ -570,11 +632,9 @@ public class StatusFragment extends BaseSupportFragment
             final DividerItemDecoration decoration = mFragment.getItemDecoration();
             decoration.setDecorationStart(0);
             if (mReplies != null) {
-//                decoration.setDecorationEndOffset(2);
-                decoration.setDecorationEnd(getItemCount() - 2);
+                decoration.setDecorationEndOffset(2);
             } else {
-//                decoration.setDecorationEndOffset(3);
-                decoration.setDecorationEnd(getItemCount() - 3);
+                decoration.setDecorationEndOffset(3);
             }
             mFragment.mRecyclerView.invalidateItemDecorations();
         }
@@ -594,10 +654,6 @@ public class StatusFragment extends BaseSupportFragment
 
         public boolean isNameFirst() {
             return mNameFirst;
-        }
-
-        public boolean isNicknameOnly() {
-            return mNicknameOnly;
         }
 
         @Override
@@ -640,6 +696,7 @@ public class StatusFragment extends BaseSupportFragment
                         cardView.setCardBackgroundColor(mCardBackgroundColor);
                     }
                     final StatusViewHolder holder = new StatusViewHolder(this, view);
+                    holder.setupViewOptions();
                     holder.setOnClickListeners();
                     return holder;
                 }
@@ -706,7 +763,7 @@ public class StatusFragment extends BaseSupportFragment
 
         @Override
         public int getItemCount() {
-            return getStatusCount();
+            return getStatusesCount();
         }
 
         @Override
@@ -954,8 +1011,22 @@ public class StatusFragment extends BaseSupportFragment
                 case MENU_FAVORITE: {
                     if (status.is_favorite) {
                         twitter.destroyFavoriteAsync(status.account_id, status.id);
+                        //spice
+                        SpiceProfilingUtil.profile(adapter.getContext(),
+                                status.account_id, status.id + ",Unfavor,"
+                                        + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count + "," + status.timestamp);
+                        SpiceProfilingUtil.log(adapter.getContext(), status.id + ",Unfavor,"
+                                + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count + "," + status.timestamp);
+                        //end
                     } else {
                         twitter.createFavoriteAsync(status.account_id, status.id);
+                        //spice
+                        SpiceProfilingUtil.profile(adapter.getContext(),
+                                status.account_id, status.id + ",Favor,"
+                                        + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count + "," + status.timestamp);
+                        SpiceProfilingUtil.log(adapter.getContext(), status.id + ",Favor,"
+                                + status.account_id + "," + status.user_id + "," + status.reply_count + "," + status.retweet_count + "," + status.favorite_count + "," + status.timestamp);
+                        //end
                     }
                     break;
                 }
@@ -1038,13 +1109,12 @@ public class StatusFragment extends BaseSupportFragment
             final StatusFragment fragment = adapter.getFragment();
             final Context context = adapter.getContext();
             final Resources resources = context.getResources();
-            final ImageLoaderWrapper loader = adapter.getImageLoader();
+            final MediaLoaderWrapper loader = adapter.getImageLoader();
             final boolean nameFirst = adapter.isNameFirst();
-            final boolean nicknameOnly = adapter.isNicknameOnly();
 
             if (status.retweet_id > 0) {
                 final String retweetedBy = UserColorNameUtils.getDisplayName(context, status.retweeted_by_id,
-                        status.retweeted_by_name, status.retweeted_by_screen_name, nameFirst, nicknameOnly);
+                        status.retweeted_by_name, status.retweeted_by_screen_name, nameFirst);
                 retweetedByView.setText(context.getString(R.string.name_retweeted, retweetedBy));
                 retweetedByContainer.setVisibility(View.VISIBLE);
             } else {
@@ -1052,15 +1122,7 @@ public class StatusFragment extends BaseSupportFragment
                 retweetedByContainer.setVisibility(View.GONE);
             }
 
-            final String nickname = getUserNickname(context, status.user_id, true);
-            if (TextUtils.isEmpty(nickname)) {
-                nameView.setText(status.user_name);
-            } else if (nicknameOnly) {
-                nameView.setText(nickname);
-            } else {
-                nameView.setText(context.getString(R.string.name_with_nickname, status.user_name,
-                        nickname));
-            }
+            nameView.setText(getUserNickname(context, status.user_id, status.user_name, true));
             screenNameView.setText("@" + status.user_screen_name);
 
             textView.setText(Html.fromHtml(status.text_html));
@@ -1167,7 +1229,8 @@ public class StatusFragment extends BaseSupportFragment
 
     }
 
-    private static class StatusListLinearLayoutManager extends LinearLayoutManager {
+
+    private static class StatusListLinearLayoutManager extends FixedLinearLayoutManager {
 
         private final RecyclerView recyclerView;
 
